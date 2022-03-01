@@ -151,7 +151,7 @@ end
 function Ḋ_func(s, D, p, model::M{<:CM{tW,<:MD}}, τ_heal=Inf) where {tW}
 	r = model.cm.damage.r
 	(D >= p.Dmax) && (return -(p.Dmax-r.D₀)/τ_heal)
-	(D <= 0) && (return 0.0)
+	(D <= 0) && (return zero(D))
 
 	KI = get_KI_from_s(s, D, model)
 	(KI <= 0) && (return -(D-r.D₀)/τ_heal)
