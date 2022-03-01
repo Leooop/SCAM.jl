@@ -36,7 +36,7 @@ function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
     update_func!(du,u,p,t) = update_derivatives!(du,u,p,t,model)
 
     # get initial conditions and tspan
-    Dᵢ = (:Dᵢ ∈ names(p.mp)[1]) ? p.mp[:Dᵢ] : p.mp[:D₀]
+    Dᵢ = (:Dᵢ ∈ names(p.mp)[1]) ? p.mp[:Dᵢ] : getp(:D₀,p.mp,p.mp_default)
     u0 = init_variables(model, Dᵢ)
     tspan = (0.0, p.model.ϵmax/data.ϵ̇_dev)
     
@@ -58,7 +58,7 @@ function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
 
 
     # create ODEProblem and solve
-    prob = ODEProblem(update_func!, u0, tspan, p.model)
+    prob = ODEProblem(update_func!, convert.(eltype(p.mp), u0), tspan, p.model)
     sol = solve(prob, Tsit5();
             abstol=p.solver.abstol,
             reltol=p.solver.reltol,

@@ -17,9 +17,9 @@ is3D(m::Model) = is3D(m.setup)
 # variables initializers : [s_ax,D] or [ϵ_ax, D] depending on the control variable type (ConstantStress or ConstantStrainRate)
 init_variables(::SD) = [0.0,0.0]
 init_variables(dam::MD) = [0.0,dam.r.D₀]
-init_variables(dam::MD,Dᵢ) = [0.0,max(Dᵢ,dam.r.D₀)]
+init_variables(dam::MD, Dᵢ) = [0.0,max(Dᵢ,dam.r.D₀)]
 init_variables(m::Model) = init_variables(m.cm.damage)
-init_variables(m::Model,Dᵢ) = init_variables(m.cm.damage,Dᵢ)
+init_variables(m::Model, Dᵢ) = init_variables(m.cm.damage, Dᵢ)
 
 Dmax_default = 0.95
 init_params(::Model{<:CM{tW,tD,tE,Nothing}}    ; Dmax=Dmax_default) where {tW,tD,tE} = (;Dmax)
@@ -59,7 +59,7 @@ stress_invariants(s, model::M{<:CM,<:TS}) = stress_invariants(s, model.setup)
 sₐₓ2σₐₓ(setup::TriaxialSetup,s) = (Δσ=sₐₓ2Δσ(setup,s) ; Δσ - setup.pc)
 sₐₓ2σₐₓ(m::Model,s) = sₐₓ2σₐₓ(m.setup,s)
 
-σₐₓ2sₐₓ(setup::TriaxialSetup{Geom3D},σₐₓ) = 2/3*(σₐₓ + setup.pc)
+σₐₓ2sₐₓ(setup::TriaxialSetup{Geom3D},σₐₓ) = (2/3)*(σₐₓ + setup.pc)
 σₐₓ2sₐₓ(setup::TriaxialSetup{Geom2D},σₐₓ) = 0.5*(σₐₓ + setup.pc)
 σₐₓ2sₐₓ(m::Model,σₐₓ) = σₐₓ2sₐₓ(m.setup,σₐₓ)
 
