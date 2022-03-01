@@ -4,8 +4,8 @@ import DamagedShearBand as DSB
 using Test
 
 pp =   [8.4e9, 0.8, 0.55, 2e-3, 0.4, 20.0, 1.014e6, 0.001, 0.4]
-names = [:G,   :γ,   :μ,   :a,  :D₀, :n,   :K₁c,   :l̇₀,   :Dᵢ]
-pn = NamedArray(pp,names)
+pp_names = [:G,   :γ,   :μ,   :a,  :D₀, :n,   :K₁c,   :l̇₀,   :Dᵢ]
+pn = NamedArray(pp,pp_names)
 r = DSB.Rheology(μ=pn[:μ], ψ=45, a=pn[:a], D₀=pn[:D₀], n=pn[:n], K₁c=pn[:K₁c], l̇₀=pn[:l̇₀])
 pc = 1e6
 ϵ̇ = 1e-5
@@ -74,7 +74,7 @@ end
 @testset "weakening functions and derivatives" begin
     # simple damage
     let cm = ConstitutiveModel(;weakening=lw, damage=sd, elasticity=elas, plasticity=plas_coulomb_minthres)
-        γ = cm.weakening.max
+        γ = cm.weakening.γ
         @test SD.weakening_func(0,cm) == 1
         @test SD.weakening_func(1,cm) == γ
         @test SD.weakening_derivative(0,cm) == SD.weakening_derivative(1,cm) == γ - 1
@@ -82,7 +82,7 @@ end
 
     # micromechanical damage
     let cm = ConstitutiveModel(;weakening=lw, damage=damp, elasticity=elas, plasticity=plas_coulomb_minthres)
-        γ = cm.weakening.max
+        γ = cm.weakening.γ
         D₀ = cm.damage.r.D₀
         @test SD.weakening_func(D₀,cm) == 1
         @test SD.weakening_func(1,cm) == γ

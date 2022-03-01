@@ -132,14 +132,8 @@ end
 @kwdef struct Model{tCM<:ConstitutiveModel,tNS<:NumericalSetup}
     cm::tCM = ConstitutiveModel()
     setup::tNS = TriaxialSetup()
-    function Model(cm::tCM,setup::tNS) where {tCM,tNS}
-        if (cm.damage isa PrincipalKICharlesLaw) && is3D(setup.geom)
-            @error "geometry can only be 2D when using `PrincipalKICharlesLaw` damage growth law"
-        end
-        new{tCM,tNS}(cm,setup)
-    end
 end
-Model{tCM,tNS}(cm,setup) where {tCM,tNS} = Model(cm,setup)
+#Model{tCM,tNS}(cm,setup) where {tCM,tNS} = Model(cm,setup)
 
 # ALIASES
 const M = Model
