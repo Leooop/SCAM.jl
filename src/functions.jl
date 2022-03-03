@@ -148,14 +148,35 @@ end
 
 
 "damage growth rate when damage type is MicroMechanicalCharlesLaw"
+# function Ḋ_func(s, D, p, model::M{<:CM{tW,<:MD}}, τ_heal=Inf) where {tW}
+# 	r = model.cm.damage.r
+# 	(D >= p.Dmax) && (return -(p.Dmax-r.D₀)/τ_heal)
+# 	(D <= 0) && (return 0.0)
+
+# 	KI = get_KI_from_s(s, D, model)
+# 	(KI <= 0) && (return -(D-r.D₀)/τ_heal)
+
+# 	#(KI >= 50000) && @show D KI 
+
+#   	dDdl = DSB.compute_dDdl(r,D) # damage derivative wrt crack length
+# 	#(KI >= 50000) && @show dDdl 
+	
+
+#   	dldtmax = 2000.0
+#   	dldt = min(r.l̇₀*(KI/r.K₁c)^(r.n),dldtmax)  #Vr cracks growth rate
+#   	#@assert dDdl * dldt >= 0
+# 	#(KI >= 50000) && @show dDdl*dldt ; println()
+#   	return dDdl * dldt - (D-r.D₀)/τ_heal
+# end
+
+"damage growth rate when damage type is MicroMechanicalCharlesLaw"
 function Ḋ_func(s, D, p, model::M{<:CM{tW,<:MD}}, τ_heal=Inf) where {tW}
 	r = model.cm.damage.r
-	(D >= p.Dmax) && (return -(p.Dmax-r.D₀)/τ_heal)
-	(D <= 0) && (return 0.0)
+	D = IfElse.ifelse(D > p.Dmax, p.Dmax, D)
+	D = IfElse.ifelse(D < r.D₀, r.D₀, D)
 
 	KI = get_KI_from_s(s, D, model)
-	(KI <= 0) && (return -(D-r.D₀)/τ_heal)
-
+	KI = IfElse.ifelse(KI <= 0, zero(D), KI)
 	#(KI >= 50000) && @show D KI 
 
   	dDdl = DSB.compute_dDdl(r,D) # damage derivative wrt crack length
@@ -164,11 +185,12 @@ function Ḋ_func(s, D, p, model::M{<:CM{tW,<:MD}}, τ_heal=Inf) where {tW}
 
   	dldtmax = 2000.0
   	dldt = min(r.l̇₀*(KI/r.K₁c)^(r.n),dldtmax)  #Vr cracks growth rate
+	dldt = IfElse.ifelse(D == p.Dmax, zero(D), dldt)
+	
   	#@assert dDdl * dldt >= 0
 	#(KI >= 50000) && @show dDdl*dldt ; println()
   	return dDdl * dldt - (D-r.D₀)/τ_heal
 end
-
 #############################
 #### VISCOSITY FUNCTIONS ####
 #############################
