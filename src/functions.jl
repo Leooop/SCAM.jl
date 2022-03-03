@@ -113,7 +113,7 @@ function get_KI_from_s(s, D, model::M{<:CM{<:W,<:IKI}})
 	r = model.cm.damage.r
     #D₀ = r.D₀ #τ_heal = 60
 	τ, σₘ = stress_invariants(s, model)
-	(D < r.D₀) && (D = r.D₀)
+	D = IfElse.ifelse(D < r.D₀, r.D₀, D)
 	KI = DSB.compute_KI(r,σₘ,τ,D)
 	return KI
 end
@@ -122,7 +122,7 @@ end
 function get_KI_from_s(s, D, model::M{<:CM{<:W,<:PKI}})
 	r = model.cm.damage.r
 	pc = confining_pressure(model)
-	(D < r.D₀) && (D = r.D₀)
+	D = IfElse.ifelse(D < r.D₀, r.D₀, D)
 	KI = compute_KI(r, sₐₓ2σₐₓ(model,s), -pc, D)
 	return KI
 end
@@ -138,11 +138,9 @@ function Ḋ_func(s, D, p, model::M{<:CM{tW,<:SD}}) where {tW}
 	τ, σₘ = stress_invariants(s, model)
 	pin = -σₘ
     σy = model.cm.damage.σy(pin)
-	if ((τ-σy)>0) & ((D < p.Dmax) | (tW<:AW))
-		Ḋ = 1/(d.Td*(d.S)^d.m) * (τ-σy)^d.m
-	else
-		Ḋ = zero(D)
-	end
+	Ḋ = IfElse.ifelse(((τ-σy)>0) & ((D < p.Dmax) | (tW<:AW)),
+		1/(d.Td*(d.S)^d.m) * (τ-σy)^d.m,
+		zero(D))
 	return Ḋ #- (D-D₀)/τ_heal
 end
 
@@ -150,12 +148,11 @@ end
 "damage growth rate when damage type is MicroMechanicalCharlesLaw"
 function Ḋ_func(s, D, p, model::M{<:CM{tW,<:MD}}, τ_heal=Inf) where {tW}
 	r = model.cm.damage.r
-	(D >= p.Dmax) && (return -(p.Dmax-r.D₀)/τ_heal)
-	(D <= 0) && (return zero(D))
+	D = IfElse.ifelse(D > p.Dmax, p.Dmax, D)
+	D = IfElse.ifelse(D < r.D₀, r.D₀, D)
 
 	KI = get_KI_from_s(s, D, model)
-	(KI <= 0) && (return -(D-r.D₀)/τ_heal)
-
+	KI = IfElse.ifelse(KI <= 0, zero(D), KI)
 	#(KI >= 50000) && @show D KI 
 
   	dDdl = DSB.compute_dDdl(r,D) # damage derivative wrt crack length
@@ -164,6 +161,8 @@ function Ḋ_func(s, D, p, model::M{<:CM{tW,<:MD}}, τ_heal=Inf) where {tW}
 
   	dldtmax = 2000.0
   	dldt = min(r.l̇₀*(KI/r.K₁c)^(r.n),dldtmax)  #Vr cracks growth rate
+	dldt = IfElse.ifelse(D == p.Dmax, zero(D), dldt)
+	
   	#@assert dDdl * dldt >= 0
 	#(KI >= 50000) && @show dDdl*dldt ; println()
   	return dDdl * dldt - (D-r.D₀)/τ_heal
@@ -213,11 +212,18 @@ function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThresho
 	σy = plastic_yield_stress(m,pin)
 	ηd = η_dam_func(m,D,Ḋ)
 
-	return ( ((ηd <= ηp) & (τ >= σy) & (D >= D₀ + 0.5*(p.Dmax-D₀))) || (D >= p.Dmax) ) ? ηp : ηd
+	islower_ηdam = IfElse.ifelse(ηd <= ηp, true, false)
+	isaboveyield_τ = IfElse.ifelse(τ >= σy, true, false)
+	Dmincond = IfElse.ifelse(D >= D₀ + 0.5*(p.Dmax-D₀), true, false)
+	Dmaxcond = IfElse.ifelse(D >= p.Dmax, true, false)
+	η = IfElse.ifelse( (islower_ηdam & isaboveyield_τ & Dmincond) | Dmaxcond,
+		ηp,
+		ηd)
+	return η
 end
 
 function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:DamageThreshold}}}, s, ϵ̇, D, Ḋ, p) where {tW,tD,tE}
-	return (D >= m.cm.plasticity.threshold.value) ? η_plas_func(m,s,ϵ̇) : η_dam_func(m,D,Ḋ)
+	return IfElse.ifelse(D >= m.cm.plasticity.threshold.value, η_plas_func(m,s,ϵ̇), η_dam_func(m,D,Ḋ))
 end
 
 

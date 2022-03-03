@@ -59,7 +59,7 @@ function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
 
     # create ODEProblem and solve
     prob = ODEProblem(update_func!, convert.(eltype(p.mp), u0), tspan, p.model)
-    sol = solve(prob, Tsit5();
+    sol = solve(prob, AutoTsit5(Rosenbrock23());#Rosenbrock23();#Tsit5();
             abstol=p.solver.abstol,
             reltol=p.solver.reltol,
             callback = cb,
