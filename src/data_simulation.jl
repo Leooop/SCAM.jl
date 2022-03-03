@@ -71,22 +71,19 @@ function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
     return DataFrame(["t","Δσ_sim", "D_sim"].=> [sol.t, Δσ_vec, sol[2,:]])
 end
 
+
 function build_model(p, data)
-    mp = deepcopy(p.mp_default)
-    params_names = names(p.mp)[1]
-    for name in params_names
-        val = getindex(p.mp,name)
-        (name != :Dᵢ) && setindex!(mp,val,name)
-    end
+    mp = p.mp
+    mpd = p.mp_default
     geom = p.model.geom
     pc = data.pc
     ϵ̇ = data.ϵ̇_dev
 
-    r = Rheology(; μ=mp[:μ], ψ=mp[:ψ], a=mp[:a], D₀=mp[:D₀], n=mp[:n], K₁c=mp[:K₁c], l̇₀=mp[:l̇₀])
-    plasticity = Plasticity(MinViscosityThreshold(), CoulombYieldStress(μ=mp[:μ],C=0))
-    cm = ConstitutiveModel(;weakening = LinearWeakening(γ=mp[:γ]),
+    r = Rheology(; μ=getp(:μ,mp,mpd), ψ=getp(:ψ,mp,mpd), a=getp(:a,mp,mpd), D₀=getp(:D₀,mp,mpd), n=getp(:n,mp,mpd), K₁c=getp(:K₁c,mp,mpd), l̇₀=getp(:l̇₀,mp,mpd))
+    plasticity = Plasticity(MinViscosityThreshold(), CoulombYieldStress(μ=getp(:μ,mp,mpd),C=0))
+    cm = ConstitutiveModel(;weakening = LinearWeakening(γ=getp(:γ,mp,mpd)),
                        damage = PrincipalKICharlesLaw(r),
-                       elasticity = IncompressibleElasticity(G=mp[:G]), #3.146e9
+                       elasticity = IncompressibleElasticity(G=getp(:G,mp,mpd)), #3.146e9
                        plasticity)
     setup = TriaxialSetup(;geom,
                            control = ConstantStrainRate(ϵ̇),
@@ -95,4 +92,4 @@ function build_model(p, data)
     return Model(;setup, cm)
 end
 
-
+getp(sym::Symbol,A::NamedArray,B::NamedArray) = haskey(A.dicts[1],sym) ? A[sym] : B[sym]
