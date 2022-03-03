@@ -79,7 +79,7 @@ function build_model(p, data)
     pc = data.pc
     ϵ̇ = data.ϵ̇_dev
 
-    r = Rheology(; μ=getp(:μ,mp,mpd), ψ=getp(:ψ,mp,mpd), a=getp(:a,mp,mpd), D₀=getp(:D₀,mp,mpd), n=getp(:n,mp,mpd), K₁c=getp(:K₁c,mp,mpd), l̇₀=getp(:μ,mp,mpd))
+    r = Rheology(; μ=getp(:μ,mp,mpd), ψ=getp(:ψ,mp,mpd), a=getp(:a,mp,mpd), D₀=getp(:D₀,mp,mpd), n=getp(:n,mp,mpd), K₁c=getp(:K₁c,mp,mpd), l̇₀=getp(:l̇₀,mp,mpd))
     plasticity = Plasticity(MinViscosityThreshold(), CoulombYieldStress(μ=getp(:μ,mp,mpd),C=0))
     cm = ConstitutiveModel(;weakening = LinearWeakening(γ=getp(:γ,mp,mpd)),
                        damage = PrincipalKICharlesLaw(r),
