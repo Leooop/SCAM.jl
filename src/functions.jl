@@ -204,21 +204,19 @@ get_viscosity(m::Model{<:CM{tW,tD,tE,Nothing}}, s, ϵ̇, D, Ḋ, p) where {tW,tD
 
 # when plastic depends on the switch condition from damaged-elastic to elastic-plastic
 function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThreshold{Nothing}}}}, s, ϵ̇, D, Ḋ, p) where {tW,tD,tE}
-	D₀ = m.cm.damage.r.D₀
+	#D₀ = m.cm.damage.r.D₀
 	ηp =  η_plas_func(m,s,ϵ̇)
 
-	τ, σₘ = stress_invariants(s, m)
-	pin = -σₘ
-	σy = plastic_yield_stress(m,pin)
+	#τ, σₘ = stress_invariants(s, m)
+	#pin = -σₘ
+	#σy = plastic_yield_stress(m,pin)
 	ηd = η_dam_func(m,D,Ḋ)
 
-	islower_ηdam = IfElse.ifelse(ηd <= ηp, true, false)
-	isaboveyield_τ = IfElse.ifelse(τ >= σy, true, false)
-	Dmincond = IfElse.ifelse(D >= D₀ + 0.5*(p.Dmax-D₀), true, false)
-	Dmaxcond = IfElse.ifelse(D >= p.Dmax, true, false)
-	η = IfElse.ifelse( (islower_ηdam & isaboveyield_τ & Dmincond) | Dmaxcond,
-		ηp,
-		ηd)
+	#isaboveyield_τ = IfElse.ifelse(τ >= σy, true, false)
+	#Dmincond = IfElse.ifelse(D >= D₀ + 0.5*(p.Dmax-D₀), true, false)
+	η = IfElse.ifelse(ηd <= ηp, ηp, ηd)
+	η = IfElse.ifelse(D >= p.Dmax, ηp, ηd)
+
 	return η
 end
 
