@@ -76,13 +76,14 @@ function build_model(p, data)
     mp = p.mp
     mpd = p.mp_default
     geom = p.model.geom
+    DamType = p.model.damage_type
     pc = data.pc
     ϵ̇ = data.ϵ̇_dev
 
     r = Rheology(; μ=getp(:μ,mp,mpd), ψ=getp(:ψ,mp,mpd), a=getp(:a,mp,mpd), D₀=getp(:D₀,mp,mpd), n=getp(:n,mp,mpd), K₁c=getp(:K₁c,mp,mpd), l̇₀=getp(:l̇₀,mp,mpd))
     plasticity = Plasticity(MinViscosityThreshold(), CoulombYieldStress(μ=getp(:μ,mp,mpd),C=0))
     cm = ConstitutiveModel(;weakening = LinearWeakening(γ=getp(:γ,mp,mpd)),
-                       damage = PrincipalKICharlesLaw(r),
+                       damage = DamType(r),
                        elasticity = IncompressibleElasticity(G=getp(:G,mp,mpd)), #3.146e9
                        plasticity)
     setup = TriaxialSetup(;geom,
