@@ -6,9 +6,10 @@ using NamedArrays
 # functions defined to allow simulation of DataSets from DataFormatter.jl
 
 function simulate_ponctual(p, data_params, target)
-    if any(target .∈ Ref((:Δσ, :Δσ_peak)))
+    if target == [:Δσ_peak]
         df_sol = get_peak_values(p, data_params)
-    elseif any(target .∈ Ref((:ϵ̇_dev,)))
+    elseif target == [:ϵ_peak, :Δσ_peak]
+        df_sol = get_peak_ϵ_and_Δσ(p, data_params)
     end
     return df_sol
 end
@@ -26,6 +27,15 @@ function get_peak_values(p, data)
     df = integrate_csr(p, data ; stop_at_peak=true)
     row_peak = df[argmin(df.Δσ_sim),:]
     return DataFrame(["Δσ_peak_sim", "D_peak_sim"] .=> [row_peak."Δσ_sim",row_peak."D_sim"])
+end
+
+function get_peak_ϵ_and_Δσ(p, data)
+    df = integrate_csr(p, data ; stop_at_peak=true)
+    row_peak = df[end,:] #argmax(abs.(df.Δσ_sim))
+    ϵ_peak = row_peak.t * data.ϵ̇
+    Δσ_peak = row_peak.Δσ_sim
+    D_peak = row_peak.D_sim
+    return DataFrame(["ϵ_peak_sim", "Δσ_peak_sim", "D_peak_sim"] .=> [ϵ_peak, Δσ_peak, D_peak])
 end
 
 function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
