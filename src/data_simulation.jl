@@ -16,7 +16,7 @@ end
 
 function simulate_timeseries(p, data_params, target, time_vec=nothing)
     if any(target .∈ Ref((:Δσ,)))
-        df_sol = integrate_csr(p, data_params ; time_vec)
+        df_sol = integrate_csr(p, data_params ; time_vec, stop_at_peak=true)
     elseif any(target .∈ Ref((:ϵ̇_dev,)))
         #model = build_model(mp, data.pc ; control = ConstantStress(data.Δσ), geom = p.geom)
     end
@@ -60,7 +60,8 @@ function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
 
     if stop_at_peak
         conditionpeak(u,t,i) = (abs(i.u[1]) < abs(i.uprev[1])) # if axial stress decreases
-        cbpeak = DiscreteCallback(conditionpeak, terminate! ; save_positions=(true,true))
+        savepos = isempty(time_vec) ? (true,true) : (false,false)
+        cbpeak = DiscreteCallback(conditionpeak, terminate! ; save_positions=savepos)
         cb = CallbackSet(cbD, cbpeak, cb_last_time)
     else
         cb = CallbackSet(cbD, cb_last_time)
