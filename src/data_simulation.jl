@@ -1,13 +1,15 @@
 using DataFormatter
 using DataFrames
 using OrdinaryDiffEq
+using NamedArrays
 
 # functions defined to allow simulation of DataSets from DataFormatter.jl
 
 function simulate_ponctual(p, data_params, target)
-    if any(target .∈ Ref((:Δσ, :Δσ_peak)))
+    if target == [:Δσ_peak]
         df_sol = get_peak_values(p, data_params)
-    elseif any(target .∈ Ref((:ϵ̇_dev,)))
+    elseif target == [:ϵ_peak, :Δσ_peak]
+        df_sol = get_peak_ϵ_and_Δσ(p, data_params)
     end
     return df_sol
 end
@@ -27,6 +29,15 @@ function get_peak_values(p, data)
     return DataFrame(["Δσ_peak_sim", "D_peak_sim"] .=> [row_peak."Δσ_sim",row_peak."D_sim"])
 end
 
+function get_peak_ϵ_and_Δσ(p, data)
+    df = integrate_csr(p, data ; stop_at_peak=true)
+    row_peak = df[end,:] #argmax(abs.(df.Δσ_sim))
+    ϵ_peak = row_peak.t * data.ϵ̇
+    Δσ_peak = row_peak.Δσ_sim
+    D_peak = row_peak.D_sim
+    return DataFrame(["ϵ_peak_sim", "Δσ_peak_sim", "D_peak_sim"] .=> [ϵ_peak, Δσ_peak, D_peak])
+end
+
 function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
     # define model
     model = build_model(p, data)
@@ -35,7 +46,7 @@ function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
     update_func!(du,u,p,t) = update_derivatives!(du,u,p,t,model)
 
     # get initial conditions and tspan
-    Dᵢ = (:Dᵢ ∈ names(p.mp)[1]) ? p.mp[:Dᵢ] : p.mp[:D₀]
+    Dᵢ = (:Dᵢ ∈ names(p.mp)[1]) ? p.mp[:Dᵢ] : getp(:D₀,p.mp,p.mp_default)
     u0 = init_variables(model, Dᵢ)
     tspan = (0.0, p.model.ϵmax/data.ϵ̇_dev)
     
@@ -57,8 +68,8 @@ function integrate_csr(p, data ; time_vec=Float64[], stop_at_peak=false)
 
 
     # create ODEProblem and solve
-    prob = ODEProblem(update_func!, u0, tspan, p.model)
-    sol = solve(prob, Tsit5();
+    prob = ODEProblem(update_func!, convert.(eltype(p.mp), u0), tspan, p.model)
+    sol = solve(prob, AutoTsit5(Rosenbrock23());#Rosenbrock23();#Tsit5();
             abstol=p.solver.abstol,
             reltol=p.solver.reltol,
             callback = cb,
@@ -76,13 +87,14 @@ function build_model(p, data)
     mp = p.mp
     mpd = p.mp_default
     geom = p.model.geom
+    DamType = p.model.damage_type
     pc = data.pc
     ϵ̇ = data.ϵ̇_dev
 
     r = Rheology(; μ=getp(:μ,mp,mpd), ψ=getp(:ψ,mp,mpd), a=getp(:a,mp,mpd), D₀=getp(:D₀,mp,mpd), n=getp(:n,mp,mpd), K₁c=getp(:K₁c,mp,mpd), l̇₀=getp(:l̇₀,mp,mpd))
     plasticity = Plasticity(MinViscosityThreshold(), CoulombYieldStress(μ=getp(:μ,mp,mpd),C=0))
     cm = ConstitutiveModel(;weakening = LinearWeakening(γ=getp(:γ,mp,mpd)),
-                       damage = PrincipalKICharlesLaw(r),
+                       damage = DamType(r),
                        elasticity = IncompressibleElasticity(G=getp(:G,mp,mpd)), #3.146e9
                        plasticity)
     setup = TriaxialSetup(;geom,

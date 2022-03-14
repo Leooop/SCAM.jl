@@ -3,6 +3,7 @@ module SimpleDamage
 using Base: @kwdef
 using StaticArrays
 import DamagedShearBand as DSB
+using IfElse
 
 using Reexport
 @reexport using DamagedShearBand: Rheology

@@ -17,9 +17,9 @@ is3D(m::Model) = is3D(m.setup)
 # variables initializers : [s_ax,D] or [ϵ_ax, D] depending on the control variable type (ConstantStress or ConstantStrainRate)
 init_variables(::SD) = [0.0,0.0]
 init_variables(dam::MD) = [0.0,dam.r.D₀]
-init_variables(dam::MD,Dᵢ) = [0.0,max(Dᵢ,dam.r.D₀)]
+init_variables(dam::MD, Dᵢ) = [0.0,max(Dᵢ,dam.r.D₀)]
 init_variables(m::Model) = init_variables(m.cm.damage)
-init_variables(m::Model,Dᵢ) = init_variables(m.cm.damage,Dᵢ)
+init_variables(m::Model, Dᵢ) = init_variables(m.cm.damage, Dᵢ)
 
 Dmax_default = 0.95
 init_params(::Model{<:CM{tW,tD,tE,Nothing}}    ; Dmax=Dmax_default) where {tW,tD,tE} = (;Dmax)
@@ -59,7 +59,7 @@ stress_invariants(s, model::M{<:CM,<:TS}) = stress_invariants(s, model.setup)
 sₐₓ2σₐₓ(setup::TriaxialSetup,s) = (Δσ=sₐₓ2Δσ(setup,s) ; Δσ - setup.pc)
 sₐₓ2σₐₓ(m::Model,s) = sₐₓ2σₐₓ(m.setup,s)
 
-σₐₓ2sₐₓ(setup::TriaxialSetup{Geom3D},σₐₓ) = 2/3*(σₐₓ + setup.pc)
+σₐₓ2sₐₓ(setup::TriaxialSetup{Geom3D},σₐₓ) = (2/3)*(σₐₓ + setup.pc)
 σₐₓ2sₐₓ(setup::TriaxialSetup{Geom2D},σₐₓ) = 0.5*(σₐₓ + setup.pc)
 σₐₓ2sₐₓ(m::Model,σₐₓ) = σₐₓ2sₐₓ(m.setup,σₐₓ)
 
@@ -113,7 +113,7 @@ function get_KI_from_s(s, D, model::M{<:CM{<:W,<:IKI}})
 	r = model.cm.damage.r
     #D₀ = r.D₀ #τ_heal = 60
 	τ, σₘ = stress_invariants(s, model)
-	(D < r.D₀) && (D = r.D₀)
+	D = IfElse.ifelse(D < r.D₀, r.D₀, D)
 	KI = DSB.compute_KI(r,σₘ,τ,D)
 	return KI
 end
@@ -122,7 +122,7 @@ end
 function get_KI_from_s(s, D, model::M{<:CM{<:W,<:PKI}})
 	r = model.cm.damage.r
 	pc = confining_pressure(model)
-	(D < r.D₀) && (D = r.D₀)
+	D = IfElse.ifelse(D < r.D₀, r.D₀, D)
 	KI = compute_KI(r, sₐₓ2σₐₓ(model,s), -pc, D)
 	return KI
 end
@@ -138,11 +138,9 @@ function Ḋ_func(s, D, p, model::M{<:CM{tW,<:SD}}) where {tW}
 	τ, σₘ = stress_invariants(s, model)
 	pin = -σₘ
     σy = model.cm.damage.σy(pin)
-	if ((τ-σy)>0) & ((D < p.Dmax) | (tW<:AW))
-		Ḋ = 1/(d.Td*(d.S)^d.m) * (τ-σy)^d.m
-	else
-		Ḋ = zero(D)
-	end
+	Ḋ = IfElse.ifelse(((τ-σy)>0) & ((D < p.Dmax) | (tW<:AW)),
+		1/(d.Td*(d.S)^d.m) * (τ-σy)^d.m,
+		zero(D))
 	return Ḋ #- (D-D₀)/τ_heal
 end
 
@@ -227,19 +225,24 @@ get_viscosity(m::Model{<:CM{tW,tD,tE,Nothing}}, s, ϵ̇, D, Ḋ, p) where {tW,tD
 
 # when plastic depends on the switch condition from damaged-elastic to elastic-plastic
 function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThreshold{Nothing}}}}, s, ϵ̇, D, Ḋ, p) where {tW,tD,tE}
-	D₀ = m.cm.damage.r.D₀
+	#D₀ = m.cm.damage.r.D₀
 	ηp =  η_plas_func(m,s,ϵ̇)
 
-	τ, σₘ = stress_invariants(s, m)
-	pin = -σₘ
-	σy = plastic_yield_stress(m,pin)
+	#τ, σₘ = stress_invariants(s, m)
+	#pin = -σₘ
+	#σy = plastic_yield_stress(m,pin)
 	ηd = η_dam_func(m,D,Ḋ)
 
-	return ( ((ηd <= ηp) & (τ >= σy) & (D >= D₀ + 0.5*(p.Dmax-D₀))) || (D >= p.Dmax) ) ? ηp : ηd
+	#isaboveyield_τ = IfElse.ifelse(τ >= σy, true, false)
+	#Dmincond = IfElse.ifelse(D >= D₀ + 0.5*(p.Dmax-D₀), true, false)
+	η = IfElse.ifelse(ηd <= ηp, ηp, ηd)
+	η = IfElse.ifelse(D >= p.Dmax, ηp, ηd)
+
+	return η
 end
 
 function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:DamageThreshold}}}, s, ϵ̇, D, Ḋ, p) where {tW,tD,tE}
-	return (D >= m.cm.plasticity.threshold.value) ? η_plas_func(m,s,ϵ̇) : η_dam_func(m,D,Ḋ)
+	return IfElse.ifelse(D >= m.cm.plasticity.threshold.value, η_plas_func(m,s,ϵ̇), η_dam_func(m,D,Ḋ))
 end
 
 
