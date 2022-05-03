@@ -5,8 +5,8 @@
 confining_pressure(s::NumericalSetup) = s.pc
 confining_pressure(m::Model) = confining_pressure(m.setup)
 
-plastic_yield_stress(plas::Plasticity,p) = plas.σy(p)
-plastic_yield_stress(m::Model,p) = plastic_yield_stress(m.cm.plasticity,p)
+plastic_yield_stress(plas::Plasticity,p,ϵₚ) = plas.σy(p,ϵₚ)
+plastic_yield_stress(m::Model,p,ϵₚ) = plastic_yield_stress(m.cm.plasticity,p,ϵₚ)
 
 ϵ2ϵdev(ϵax,E,ν,pc) = 2/3 * (1+ν)/E * (E*ϵax + (1 - 2ν)*pc)
 ϵ̇2ϵ̇dev(ϵ̇,ν) = 2/3 * (1+ν) * ϵ̇
@@ -15,16 +15,30 @@ is3D(g::Geom) = g isa Geom3D ? true : false
 is3D(setup::TriaxialSetup) = is3D(setup.geom) 
 is3D(m::Model) = is3D(m.setup) 
 # variables initializers : [s_ax,D] or [ϵ_ax, D] depending on the control variable type (ConstantStress or ConstantStrainRate)
+# no strain weakening :
 init_variables(::SD) = [0.0,0.0]
 init_variables(dam::MD) = [0.0,dam.r.D₀]
+init_variables(::Nothing) = [0.0,0.0]
 init_variables(dam::MD, Dᵢ) = [0.0,max(Dᵢ,dam.r.D₀)]
-init_variables(m::Model) = init_variables(m.cm.damage)
-init_variables(m::Model, Dᵢ) = init_variables(m.cm.damage, Dᵢ)
+init_variables(::Nothing, Dᵢ) = [0.0,0.0]
+init_variables(dam::Maybe(MD), ::YieldStress) = init_variables(dam::MD)
+init_variables(dam::Maybe(MD), ::YieldStress, Dᵢ) = init_variables(dam::MD, Dᵢ)
 
-Dmax_default = 0.95
-init_params(::Model{<:CM{tW,tD,tE,Nothing}}    ; Dmax=Dmax_default) where {tW,tD,tE} = (;Dmax)
-init_params(::Model{<:CM{tW,tD,tE,<:P{<:DT}}}  ; Dmax=Dmax_default) where {tW,tD,tE} = (;Dmax)
-init_params(::Model{<:CM{tW,tD,tE,<:P{<:MVT}}} ; Dmax=Dmax_default) where {tW,tD,tE} = (;Dmax)
+# with strain weakening :
+init_variables(::SD, ::SWCoulombY) = [0.0,0.0,0.0]
+init_variables(dam::MD, ::SWCoulombY) = [0.0, dam.r.D₀, 0.0]
+init_variables(::Nothing, ::SWCoulombY) = [0.0, 0.0, 0.0]
+init_variables(dam::MD, ::SWCoulombY, Dᵢ) = [0.0, max(Dᵢ,dam.r.D₀), 0.0]
+
+init_variables(m::Model) = init_variables(m.cm.damage, m.cm.plasticity.σy)
+init_variables(m::Model, Dᵢ) = init_variables(m.cm.damage, m.cm.plasticity.σy, Dᵢ)
+
+
+const DMAX_DEFAULT = 0.95
+init_params(::Model{<:CM{tW,tD,tE,Nothing}}    ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
+init_params(::Model ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
+# init_params(::Model{<:CM{tW,tD,tE,<:P{<:DT}}}  ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
+# init_params(::Model{<:CM{tW,tD,tE,<:P{<:MVT}}} ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 
 # get shear and normal stress on a defect oriented ψ degree wrt σ1, negative in compression by convention
 "shear stress from σ₁, σ₃ and ψ"
@@ -71,7 +85,7 @@ sₐₓ2Δσ(model::M,s) = sₐₓ2Δσ(model.setup,s)
 Δσ2sₐₓ(setup::TriaxialSetup,Δσ) = Δσ2sₐₓ(setup.geom,Δσ)
 Δσ2sₐₓ(model::M,Δσ) = Δσ2sₐₓ(model.setup,Δσ)
 
-# ϵII for incompressible triaxial experiment as defined in SiStER
+# ϵII for incompressible triaxial experiment as defined in SiStER (ϵII = sqrt(0.5*eij*eij))
 ϵII_func(ϵ, model::M{<:CM{tW,tD,<:IE},<:TS}) where {tW,tD} = geom_τ_factor(model)*abs(ϵ)
 ϵ̇II_func(ϵ̇, model::M{<:CM{tW,tD,<:IE},<:TS}) where {tW,tD} = ϵII_func(ϵ̇, model) # same for the time derivative 
 
@@ -95,6 +109,10 @@ weakening_derivative(D,cm::CM{<:AW,<:MD}) = -cm.weakening.γ*(1+cm.damage.r.D₀
 
 weakening_func(D,m::Model) = weakening_func(D,m.cm)
 weakening_derivative(D,m::Model) = weakening_derivative(D,m.cm)
+
+# when material in non weakenable
+weakening_func(D,m::M{<:CM{Nothing}}) = 1.0
+weakening_derivative(D,m::M{<:CM{Nothing}}) = 0.0
 
 function get_energy_based_G(D, τ, σ, s₁₂, model::M{<:CM{<:EBW,<:IKI}})
 	r = model.cm.damage.r
@@ -130,6 +148,7 @@ end
 #######################
 #### DAMAGE GROWTH ####
 #######################
+Ḋ_func(s, D, p, model::M{<:CM{tW,Nothing}}) where {tW} = 0.0
 
 "damage growth rate when damage type is SimpleCharlesLaw"
 function Ḋ_func(s, D, p, model::M{<:CM{tW,<:SD}}) where {tW}
@@ -201,37 +220,70 @@ function η_dam_func(model,D,Ḋ)
 end
 
 # plastic viscosity for constant strain rate setup
-function η_plas_func(model::M{tCM,<:TS{tG,<:CSR}}, s, ϵ̇) where {tCM,tG}
-	_, σₘ = stress_invariants(s, model)
+function η_plas_func(model::M{tCM,<:TS{tG,<:CSR}}, s, ϵ̇, ϵₚ) where {tCM,tG}
+	τ, σₘ = stress_invariants(s, model)
 	pin = -σₘ
-    σy = plastic_yield_stress(model,pin)
-	τ_fact = geom_τ_factor(model)
-	#ϵ̇II = ϵ̇II_func(ϵ̇, model)
-	return abs(σy/(2*τ_fact*ϵ̇))
+    σy = plastic_yield_stress(model, pin, ϵₚ)
+	ϵ̇II = ϵ̇II_func(ϵ̇, model)
+	if τ > σy
+		η = abs(σy/(2*ϵ̇II))
+		# @show η
+		# η = find_best_η(model, η, ϵ̇, s, σy ; maxiter=100, reltol=1e-8, α=5e2)
+		# @show η
+		# println()
+	else
+		η = 1e30
+	end
+	return η
 end
 
 # plastic viscosity for constant stress setup
-function η_plas_func(model::M{tCM,<:TS{tG,<:CS}}, s, ϵ̇) where {tCM,tG}
-	_, σₘ = stress_invariants(s, model)
+function η_plas_func(model::M{tCM,<:TS{tG,<:CS}}, s, ϵ̇, ϵₚ) where {tCM,tG}
+	τ, σₘ = stress_invariants(s, model)
 	pin = -σₘ
-	σy = plastic_yield_stress(model,pin)
-	τ_fact = geom_τ_factor(model)
-	#ϵ̇II = ϵ̇II_func(ϵ̇, model)
-	return abs(σy/(2*τ_fact*ϵ̇))
+	σy = plastic_yield_stress(model, pin, ϵₚ)
+	ϵ̇II = ϵ̇II_func(ϵ̇, model)
+	if τ > σy
+		η = abs(σy/(2*ϵ̇II))
+	else
+		η = 1e30
+	end
+	return η
 end
 
-# when no plasticity, viscosity is always linked to damage
-get_viscosity(m::Model{<:CM{tW,tD,tE,Nothing}}, s, ϵ̇, D, Ḋ, p) where {tW,tD,tE} = η_dam_func(m,D,Ḋ)
+# residual function from equilibrium between γ̇elast that corrects plastic viscosity and γ̇elast from current stress. (blue notebook p200-201)
+# expressed in log(eta)
 
+# fn(logη,ϵ̇,ϵ̇II,s,σy) = sqrt(0.75*(ϵ̇^2 - s*ϵ̇/exp10(logη)) + 3/16*(s^2/exp10(logη)^2)) - 0.5*(ϵ̇II - σy/exp10(logη))
+# ∇fn(f::F, x; δx=1e-6) where F = (f(x+δx)-f(x-δx)) / 2δx
+# function find_best_η(model, η, ϵ̇, s, σy ; maxiter=100, reltol=1e-8, α=5e2)
+# 	ηlog = log10(η)
+# 	ϵ̇II = ϵ̇II_func(ϵ̇, model)
+# 	f(ηlog) = fn(ηlog,ϵ̇,ϵ̇II,s,σy)
+# 	value_prev = f(ηlog)
+# 	for i in 1:maxiter
+# 		δη = - α * ∇fn(f,ηlog)
+# 		ηlog += δη
+# 		value = f(ηlog)
+# 		abs(value - value_prev/value_prev) <= reltol && break
+# 		value_prev = value
+# 	end
+# 	return exp10(η)
+# end
+
+# when no plasticity, viscosity is always linked to damage
+get_viscosity(m::Model{<:CM{tW,tD,tE,Nothing}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE} = η_dam_func(m, D, Ḋ)
+# when elasto-plastic only
+get_viscosity(m::Model{<:CM{Nothing,Nothing,tE,tP}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tE,tP} = η_plas_func(m, s, ϵ̇, ϵₚ)
 # when plastic depends on the switch condition from damaged-elastic to elastic-plastic
-function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThreshold{Nothing}}}}, s, ϵ̇, D, Ḋ, p) where {tW,tD,tE}
+function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThreshold{Nothing}}}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE}
 	#D₀ = m.cm.damage.r.D₀
-	ηp =  η_plas_func(m,s,ϵ̇)
+	ηp =  η_plas_func(m, s, ϵ̇, ϵₚ)
 
 	#τ, σₘ = stress_invariants(s, m)
 	#pin = -σₘ
 	#σy = plastic_yield_stress(m,pin)
-	ηd = η_dam_func(m,D,Ḋ)
+	ηd = η_dam_func(m, D, Ḋ)
 
 	#isaboveyield_τ = IfElse.ifelse(τ >= σy, true, false)
 	#Dmincond = IfElse.ifelse(D >= D₀ + 0.5*(p.Dmax-D₀), true, false)
@@ -241,8 +293,8 @@ function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThresho
 	return η
 end
 
-function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:DamageThreshold}}}, s, ϵ̇, D, Ḋ, p) where {tW,tD,tE}
-	return IfElse.ifelse(D >= m.cm.plasticity.threshold.value, η_plas_func(m,s,ϵ̇), η_dam_func(m,D,Ḋ))
+function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:DamageThreshold}}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE}
+	return IfElse.ifelse(D >= m.cm.plasticity.threshold.value, η_plas_func(m, s, ϵ̇, ϵₚ), η_dam_func(m, D, Ḋ))
 end
 
 
@@ -254,6 +306,8 @@ end
 ##########################
 
 ## INPLACE functions ##
+#######################
+
 ### Constant strain rate :
 "inplace derivative update function for constant strain rate test, variables are the deviatoric axial stress and the damage"
 function update_derivatives!(du,u,p,t,model::M{tCM,<:TS{tG,<:CSR}}) where {tCM,tG}
@@ -261,10 +315,26 @@ function update_derivatives!(du,u,p,t,model::M{tCM,<:TS{tG,<:CSR}}) where {tCM,t
     ϵ̇ = model.setup.control.ϵ̇
 	s, D = u
 	Ḋ = Ḋ_func(s, D, p, model)
-	η = get_viscosity(model, s, ϵ̇, D, Ḋ, p)
+	η = get_viscosity(model, s, ϵ̇, D, Ḋ, 0.0, p)
 	fw = weakening_func(D,model)
 	du[1] = 2*G*fw * (ϵ̇ - s/(2η))
 	du[2] = Ḋ 
+    du
+end
+
+### Constant strain rate elasto-plastic only:
+"inplace derivative update function for constant strain rate test, variables are the deviatoric axial stress and the damage"
+function update_derivatives!(du,u,p,t,model::M{<:CM{tW,tD,tE,<:P{tPT,<:SWCoulombY}},<:TS{tG,<:CSR}}) where {tW,tD,tE,tPT,tG}
+    G = model.cm.elasticity.G
+    ϵ̇ = model.setup.control.ϵ̇
+	s, D, ϵₚ = u
+	Ḋ = Ḋ_func(s, D, p, model)
+	η = get_viscosity(model, s, ϵ̇, D, Ḋ, ϵₚ, p)
+	fw = weakening_func(D,model)
+	du[1] = ṡ = 2*G*fw * (ϵ̇ - s/(2η))
+	du[2] = Ḋ 
+	τ̇, _ = stress_invariants(ṡ, model)
+	du[3] = ϵ̇II_func(ϵ̇, model) - τ̇/(2*G*fw)
     du
 end
 
@@ -275,20 +345,22 @@ function update_derivatives!(du,u,p,t,model::M{tCM,<:TS{tG,<:CS}}) where {tCM,tG
 	ϵ, D = u
 	ϵ̇_prev = du[1]
 	Ḋ = Ḋ_func(s, D, p, model)
-	η = get_viscosity(model, s, ϵ̇_prev, D, Ḋ, p)
+	η = get_viscosity(model, s, ϵ̇_prev, D, Ḋ, 0.0, p)
 	du[1] = s/(2η)
 	du[2] = Ḋ
     du
 end
 
 ## OUT OF PLACE functions ##
+############################
+
 "derivative update function for constant strain rate test, variables are the deviatoric axial stress and the damage"
 function update_derivatives(u,p,t,model::M{tCM,<:TS{tG,<:CSR}}) where {tCM,tG}
     G = model.cm.elasticity.G
     ϵ̇ = model.setup.control.ϵ̇
 	s, D = u
 	Ḋ = Ḋ_func(s, D, p, model)
-	η = get_viscosity(model, s, ϵ̇, D, Ḋ, p)
+	η = get_viscosity(model, s, ϵ̇, D, Ḋ, 0.0, p)
 	fw = weakening_func(D,model)
 	ṡ = 2*G*fw * (ϵ̇ - s/(2η))
     return SA[ṡ, Ḋ]
@@ -300,7 +372,7 @@ function update_derivatives(u,p,t,model::M{tCM,<:TS{tG,<:CS}}) where {tCM,tG}
 	ϵ, D = u
 	ϵ̇_prev = du[1]
 	Ḋ = Ḋ_func(s, D, p, model)
-	η = get_viscosity(model, s, ϵ̇_prev, D, Ḋ, p)
+	η = get_viscosity(model, s, ϵ̇_prev, D, Ḋ, 0.0, p)
 	ϵ̇ = s/(2η)
     return SA[ϵ̇, Ḋ]
 end
