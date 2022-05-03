@@ -220,28 +220,10 @@ function η_dam_func(model,D,Ḋ)
 end
 
 # plastic viscosity for constant strain rate setup
-function η_plas_func(model::M{tCM,<:TS{tG,<:CSR}}, s, ϵ̇, ϵₚ) where {tCM,tG}
+function η_plas_func(model, s, ϵ̇, ϵₚ)
 	τ, σₘ = stress_invariants(s, model)
 	pin = -σₘ
     σy = plastic_yield_stress(model, pin, ϵₚ)
-	ϵ̇II = ϵ̇II_func(ϵ̇, model)
-	if τ > σy
-		η = abs(σy/(2*ϵ̇II))
-		# @show η
-		# η = find_best_η(model, η, ϵ̇, s, σy ; maxiter=100, reltol=1e-8, α=5e2)
-		# @show η
-		# println()
-	else
-		η = 1e30
-	end
-	return η
-end
-
-# plastic viscosity for constant stress setup
-function η_plas_func(model::M{tCM,<:TS{tG,<:CS}}, s, ϵ̇, ϵₚ) where {tCM,tG}
-	τ, σₘ = stress_invariants(s, model)
-	pin = -σₘ
-	σy = plastic_yield_stress(model, pin, ϵₚ)
 	ϵ̇II = ϵ̇II_func(ϵ̇, model)
 	if τ >= σy
 		η = abs(σy/(2*ϵ̇II))
