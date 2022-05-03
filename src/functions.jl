@@ -243,7 +243,7 @@ function η_plas_func(model::M{tCM,<:TS{tG,<:CS}}, s, ϵ̇, ϵₚ) where {tCM,tG
 	pin = -σₘ
 	σy = plastic_yield_stress(model, pin, ϵₚ)
 	ϵ̇II = ϵ̇II_func(ϵ̇, model)
-	if τ > σy
+	if τ >= σy
 		η = abs(σy/(2*ϵ̇II))
 	else
 		η = 1e30
@@ -287,8 +287,9 @@ function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThresho
 
 	#isaboveyield_τ = IfElse.ifelse(τ >= σy, true, false)
 	#Dmincond = IfElse.ifelse(D >= D₀ + 0.5*(p.Dmax-D₀), true, false)
-	η = IfElse.ifelse(ηd <= ηp, ηp, ηd)
-	η = IfElse.ifelse(D >= p.Dmax, ηp, ηd)
+	η = ((ηd <= ηp) || (D >= p.Dmax)) ? ηp : ηd
+	#@show D Ḋ ηd ηp η
+	#println()
 
 	return η
 end
