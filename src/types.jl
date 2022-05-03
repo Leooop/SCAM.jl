@@ -74,6 +74,22 @@ end
 end
 (σy::CoulombYieldStress)(p) = (ϕ = atan(σy.μ) ; p*sin(ϕ) + σy.C*cos(ϕ))
 
+@kwdef struct StrainWeakenedCoulombYieldStress{tμ<:Real,tC<:Real,tμ2<:Real,tC2<:Real,tϵpc<:Real} <: YieldStress 
+    μ::tμ = 0.6
+    C::tC = 0.0
+    μweak::tμ2 = 0.6
+    Cweak::tC2 = 0.0
+    ϵₚcrit::tϵpc = 0.0
+end
+μeff(σy::StrainWeakenedCoulombYieldStress,ϵₚ) = ϵₚ < σy.ϵₚcrit ? σy.μweak + ((σy.ϵₚcrit-ϵₚ)/σy.ϵₚcrit)*(σy.μ-σy.μweak) : σy.μweak
+Ceff(σy::StrainWeakenedCoulombYieldStress,ϵₚ) = ϵₚ < σy.ϵₚcrit ? σy.Cweak + ((σy.ϵₚcrit-ϵₚ)/σy.ϵₚcrit)*(σy.C-σy.Cweak) : σy.Cweak
+function (σy::StrainWeakenedCoulombYieldStress)(p,ϵₚ)
+    μ, C = μeff(σy,ϵₚ), Ceff(σy,ϵₚ)
+    ϕ = atan(μ)
+    p*sin(ϕ) + C*cos(ϕ)
+end
+# helper func:
+(σy::YieldStress)(p,ϵₚ) = σy(p)
 
 # damage growth types
 abstract type DamageGrowth end
@@ -114,14 +130,14 @@ end
     value::T = 0.99
 end
 
-@kwdef struct Plasticity{tC<:PlasticityThreshold,tY<:YieldStress}
+@kwdef struct Plasticity{tC<:Maybe(PlasticityThreshold),tY<:YieldStress}
     threshold::tC = DamageThreshold(0.95)
     σy::tY = CoulombYieldStress() # instance of YieldStress subtype
 end
 
 
 # Constitutive model type
-@kwdef struct ConstitutiveModel{tW<:Weakening,tD<:DamageGrowth,tE<:Elasticity,tP<:Maybe(Plasticity)} 
+@kwdef struct ConstitutiveModel{tW<:Maybe(Weakening),tD<:Maybe(DamageGrowth),tE<:Elasticity,tP<:Maybe(Plasticity)} 
     weakening::tW = LinearWeakening()# elastic modulus weakening type
     damage::tD = SimpleCharlesLaw()# Damage growth type
     elasticity::tE = IncompressibleElasticity() # Elasticity
@@ -149,6 +165,7 @@ const AW = AsymptoticWeakening
 const EBW = EnergyBasedWeakening
 const ConstY = ConstantYieldStress
 const CoulombY = CoulombYieldStress
+const SWCoulombY = StrainWeakenedCoulombYieldStress
 const SD = SimpleCharlesLaw
 const MD = MicroMechanicalCharlesLaw
 const IKI = InvariantsKICharlesLaw
