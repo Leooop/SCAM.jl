@@ -221,37 +221,30 @@ end
 
 # plastic viscosity for constant strain rate setup
 function η_plas_func(model, s, ϵ̇, ϵₚ)
-	τ, σₘ = stress_invariants(s, model)
-	pin = -σₘ
-    σy = plastic_yield_stress(model, pin, ϵₚ)
-	ϵ̇II = ϵ̇II_func(ϵ̇, model)
-	if τ >= σy
-		η = abs(σy/(2*ϵ̇II))
+	Δσ = sₐₓ2Δσ(model,s)
+	pc = confining_pressure(model)
+
+	# 0.5*abs(Δσ) >= sin(ϕ)(0.5*abs(Δσ) + pc) + cos(ϕ)*C 
+	# radius and center of mohr coulomb circle :
+	τmc = 0.5*abs(Δσ)
+	σmc = 0.5Δσ - pc
+
+    σy = plastic_yield_stress(model, -σmc, ϵₚ)
+	#ϵ̇II = ϵ̇II_func(ϵ̇, model)
+	if τmc >= σy
+		sy = Δσ2sₐₓ(model,2*σy)
+		η = abs(sy/(2*ϵ̇))
 	else
 		η = 1e30
 	end
+
+	# if model.cm.plasticity.σy isa StrainWeakenedCoulombYieldStress
+	# 	@show τmc sy η
+	# 	println()
+	# end
+
 	return η
 end
-
-# residual function from equilibrium between γ̇elast that corrects plastic viscosity and γ̇elast from current stress. (blue notebook p200-201)
-# expressed in log(eta)
-
-# fn(logη,ϵ̇,ϵ̇II,s,σy) = sqrt(0.75*(ϵ̇^2 - s*ϵ̇/exp10(logη)) + 3/16*(s^2/exp10(logη)^2)) - 0.5*(ϵ̇II - σy/exp10(logη))
-# ∇fn(f::F, x; δx=1e-6) where F = (f(x+δx)-f(x-δx)) / 2δx
-# function find_best_η(model, η, ϵ̇, s, σy ; maxiter=100, reltol=1e-8, α=5e2)
-# 	ηlog = log10(η)
-# 	ϵ̇II = ϵ̇II_func(ϵ̇, model)
-# 	f(ηlog) = fn(ηlog,ϵ̇,ϵ̇II,s,σy)
-# 	value_prev = f(ηlog)
-# 	for i in 1:maxiter
-# 		δη = - α * ∇fn(f,ηlog)
-# 		ηlog += δη
-# 		value = f(ηlog)
-# 		abs(value - value_prev/value_prev) <= reltol && break
-# 		value_prev = value
-# 	end
-# 	return exp10(η)
-# end
 
 # when no plasticity, viscosity is always linked to damage
 get_viscosity(m::Model{<:CM{tW,tD,tE,Nothing}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE} = η_dam_func(m, D, Ḋ)
@@ -259,19 +252,23 @@ get_viscosity(m::Model{<:CM{tW,tD,tE,Nothing}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where
 get_viscosity(m::Model{<:CM{Nothing,Nothing,tE,tP}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tE,tP} = η_plas_func(m, s, ϵ̇, ϵₚ)
 # when plastic depends on the switch condition from damaged-elastic to elastic-plastic
 function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThreshold{Nothing}}}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE}
-	#D₀ = m.cm.damage.r.D₀
-	ηp =  η_plas_func(m, s, ϵ̇, ϵₚ)
 
-	#τ, σₘ = stress_invariants(s, m)
-	#pin = -σₘ
-	#σy = plastic_yield_stress(m,pin)
+	ηp =  η_plas_func(m, s, ϵ̇, ϵₚ)
 	ηd = η_dam_func(m, D, Ḋ)
 
-	#isaboveyield_τ = IfElse.ifelse(τ >= σy, true, false)
-	#Dmincond = IfElse.ifelse(D >= D₀ + 0.5*(p.Dmax-D₀), true, false)
-	η = ((ηd <= ηp) || (D >= p.Dmax)) ? ηp : ηd
-	#@show D Ḋ ηd ηp η
-	#println()
+	# condition on interaction of cracks
+	dKI = get_KI_from_s(s, D+1e-4, m) - get_KI_from_s(s, D, m)
+	interaction_is_dominant = dKI > 0
+
+	if D >= p.Dmax
+		η = ηp
+	elseif (ηd <= ηp) & interaction_is_dominant
+		η = ηp
+	else 
+		η = ηd
+	end
+	#η = ((ηd <= ηp) || (D >= p.Dmax)) ? ηp : ηd
+	#println("D = ", D, ", ηd = ", ηd, ", η = ", η)
 
 	return η
 end
@@ -315,9 +312,8 @@ function update_derivatives!(du,u,p,t,model::M{<:CM{tW,tD,tE,<:P{tPT,<:SWCoulomb
 	η = get_viscosity(model, s, ϵ̇, D, Ḋ, ϵₚ, p)
 	fw = weakening_func(D,model)
 	du[1] = ṡ = 2*G*fw * (ϵ̇ - s/(2η))
-	du[2] = Ḋ 
-	τ̇, _ = stress_invariants(ṡ, model)
-	du[3] = ϵ̇II_func(ϵ̇, model) - τ̇/(2*G*fw)
+	du[2] = Ḋ
+	du[3] = ϵ̇ - ṡ/(2*G*fw)
     du
 end
 

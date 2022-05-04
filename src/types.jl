@@ -81,8 +81,8 @@ end
     Cweak::tC2 = 0.0
     ϵₚcrit::tϵpc = 0.0
 end
-μeff(σy::StrainWeakenedCoulombYieldStress,ϵₚ) = ϵₚ < σy.ϵₚcrit ? σy.μweak + ((σy.ϵₚcrit-ϵₚ)/σy.ϵₚcrit)*(σy.μ-σy.μweak) : σy.μweak
-Ceff(σy::StrainWeakenedCoulombYieldStress,ϵₚ) = ϵₚ < σy.ϵₚcrit ? σy.Cweak + ((σy.ϵₚcrit-ϵₚ)/σy.ϵₚcrit)*(σy.C-σy.Cweak) : σy.Cweak
+μeff(σy::StrainWeakenedCoulombYieldStress,ϵₚ) = abs(ϵₚ) < σy.ϵₚcrit ? σy.μweak + ((σy.ϵₚcrit-abs(ϵₚ))/σy.ϵₚcrit)*(σy.μ-σy.μweak) : σy.μweak
+Ceff(σy::StrainWeakenedCoulombYieldStress,ϵₚ) = abs(ϵₚ) < σy.ϵₚcrit ? σy.Cweak + ((σy.ϵₚcrit-abs(ϵₚ))/σy.ϵₚcrit)*(σy.C-σy.Cweak) : σy.Cweak
 function (σy::StrainWeakenedCoulombYieldStress)(p,ϵₚ)
     μ, C = μeff(σy,ϵₚ), Ceff(σy,ϵₚ)
     ϕ = atan(μ)
