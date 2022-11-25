@@ -207,7 +207,14 @@ function build_model(p, data ; control_type=ConstantStrainRate)
         control = ConstantStress(sc)
     end
 
-    r = Rheology(; μ=getp(:μ,mp,mpd), ψ=getp(:ψ,mp,mpd), a=getp(:a,mp,mpd), D₀=getp(:D₀,mp,mpd), n=getp(:n,mp,mpd), K₁c=getp(:K₁c,mp,mpd), l̇₀=getp(:l̇₀,mp,mpd))
+    r = Rheology(; μ   = getp(:μ,mp,mpd), 
+                   ψ   = getp(:ψ,mp,mpd), 
+                   a   = getp(:a,mp,mpd), 
+                   D₀  = getp(:D₀,mp,mpd), 
+                   n   = getp(:n,mp,mpd), 
+                   K₁c = getp(:K₁c,mp,mpd), 
+                   l̇₀  = getp(:l̇₀,mp,mpd),
+                   β   = getp(:β,mp,mpd))
     plasticity = Plasticity(MinViscosityThreshold(), CoulombYieldStress(μ=getp(:μ,mp,mpd),C=0))
     cm = ConstitutiveModel(;weakening = LinearWeakening(γ=getp(:γ,mp,mpd)),
                        damage = DamType(r),

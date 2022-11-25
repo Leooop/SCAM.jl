@@ -60,10 +60,21 @@ compute_A1A3(r::Rheology) = (A1 = compute_A1(r) ; A3 = compute_A3(r, A1) ; retur
 compute_KI(r::Rheology, σ₁, σ₃, A1, A3, c1, c2, c3) = sqrt(π*r.a) * ((σ₃*A3 - σ₁*A1) * (c1 + c2) + σ₃*c3)
 compute_KI(r::Rheology, σ₁, σ₃, D) = compute_KI(r, σ₁, σ₃, compute_A1A3(r)..., compute_c1c2c3(r,D)...)
 
+function compute_KI_invariants(r::Rheology,σ,τ,D)
+    c1, c2, c3 = compute_c1c2c3(r,D)
+    A, B = compute_AB(r,c1,c2,c3)
+    a = r.a<=0 ? 1e-7 : r.a
+    return (A*σ + B*τ) * sqrt(π*a)
+end
+
+function compute_dDdl(r::Rheology,D)
+    return (3*D^(2/3)*r.D₀^(1/3))/(cosd(r.ψ)*r.a)
+end
+
 compute_KI_no_interaction(r::Rheology, σ₁, σ₃, A1, A3, c1, c2, c3) = sqrt(π*r.a) * ((σ₃*A3 - σ₁*A1)*c1 + σ₃*c3)
 compute_KI_no_interaction(r::Rheology, σ₁, σ₃, D) = compute_KI_no_interaction(r, σ₁, σ₃, compute_A1A3(r)..., compute_c1c2c3(r,D)...)
 #################
-# use those instead to drop the match with extreme cases, vizualizing the difference shows a massive underestime of KI,
+# use those instead to drop the match with extreme cases, vizualizing the difference shows a massive underestimate of KI,
 # it should not be used.
 
 # c1 when droping Beta in the wedging force term of KI

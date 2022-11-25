@@ -21,8 +21,8 @@ init_variables(dam::MD) = [0.0,dam.r.D₀]
 init_variables(::Nothing) = [0.0,0.0]
 init_variables(dam::MD, Dᵢ) = [0.0,max(Dᵢ,dam.r.D₀)]
 init_variables(::Nothing, Dᵢ) = [0.0,0.0]
-init_variables(dam::Maybe(MD), ::YieldStress) = init_variables(dam::MD)
-init_variables(dam::Maybe(MD), ::YieldStress, Dᵢ) = init_variables(dam::MD, Dᵢ)
+init_variables(dam::Maybe(MD), ::Maybe(YieldStress)) = init_variables(dam::MD)
+init_variables(dam::Maybe(MD), ::Maybe(YieldStress), Dᵢ) = init_variables(dam::MD, Dᵢ)
 
 # with strain weakening :
 init_variables(::SD, ::SWCoulombY) = [0.0,0.0,0.0]
@@ -32,10 +32,12 @@ init_variables(dam::MD, ::SWCoulombY, Dᵢ) = [0.0, max(Dᵢ,dam.r.D₀), 0.0]
 
 init_variables(m::Model) = init_variables(m.cm.damage, m.cm.plasticity.σy)
 init_variables(m::Model, Dᵢ) = init_variables(m.cm.damage, m.cm.plasticity.σy, Dᵢ)
+init_variables(m::Model{<:CM{<:W,<:DG,<:E,Nothing}}) = init_variables(m.cm.damage, nothing)
+init_variables(m::Model{<:CM{<:W,<:DG,<:E,Nothing}}, Dᵢ) = init_variables(m.cm.damage, nothing, Dᵢ)
 
 
 const DMAX_DEFAULT = 0.95
-init_params(::Model{<:CM{tW,tD,tE,Nothing}}    ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
+init_params(::Model{<:CM{tW,tD,tE,Nothing}} ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 init_params(::Model ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 # init_params(::Model{<:CM{tW,tD,tE,<:P{<:DT}}}  ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 # init_params(::Model{<:CM{tW,tD,tE,<:P{<:MVT}}} ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
@@ -106,6 +108,10 @@ weakening_derivative(D,cm::CM{<:AW,<:SD}) = -cm.weakening.γ/(1+D)^(cm.weakening
 weakening_func(D,cm::CM{<:AW,<:MD}) = ((D<cm.damage.r.D₀)&&(D=cm.damage.r.D₀) ; ((1+cm.damage.r.D₀)/(1+D))^cm.weakening.γ) #TODO: TESTS
 weakening_derivative(D,cm::CM{<:AW,<:MD}) = -cm.weakening.γ*(1+cm.damage.r.D₀)^(cm.weakening.γ)/(1+D)^(cm.weakening.γ+1) #TODO: TESTS
 
+#test weakening with G(Di) = G0
+#weakening_func(D,cm::CM{<:LW,<:MD}) = ((cm.weakening.γ-1)*D + 1 - cm.damage.r.D₀*cm.weakening.γ) / (1-cm.damage.r.D₀)
+#weakening_derivative(D,cm::CM{<:LW,<:MD}) = (cm.weakening.γ-1)/(1-cm.damage.r.D₀)
+
 
 weakening_func(D,m::Model) = weakening_func(D,m.cm)
 weakening_derivative(D,m::Model) = weakening_derivative(D,m.cm)
@@ -114,14 +120,14 @@ weakening_derivative(D,m::Model) = weakening_derivative(D,m.cm)
 weakening_func(D,m::M{<:CM{Nothing}}) = 1.0
 weakening_derivative(D,m::M{<:CM{Nothing}}) = 0.0
 
-function get_energy_based_G(D, τ, σ, s₁₂, model::M{<:CM{<:EBW,<:IKI}})
-	r = model.cm.damage.r
-	G = model.cm.elasticity.G
-	A, B = DSB.compute_AB(r,D)
-	A1, B1 = DSB.compute_A1B1(r,A,B)
-	#return 1 / ( 1/(4G) * ( 1 + (B1/2) * (B1 + A1*σ/τ - A1*σ*s₁₂^2/τ^3) ) )
-	return 1/(1 + B1^2/2 + A1*B1*σ /(2*τ))
-end
+# function get_energy_based_G(D, τ, σ, s₁₂, model::M{<:CM{<:EBW,<:IKI}})
+# 	r = model.cm.damage.r
+# 	G = model.cm.elasticity.G
+# 	A, B = DSB.compute_AB(r,D)
+# 	A1, B1 = DSB.compute_A1B1(r,A,B)
+# 	#return 1 / ( 1/(4G) * ( 1 + (B1/2) * (B1 + A1*σ/τ - A1*σ*s₁₂^2/τ^3) ) )
+# 	return 1/(1 + B1^2/2 + A1*B1*σ /(2*τ))
+# end
 
 #############
 #### KI  ####
@@ -132,7 +138,7 @@ function get_KI_from_s(s, D, model::M{<:CM{<:W,<:IKI}})
     #D₀ = r.D₀ #τ_heal = 60
 	τ, σₘ = stress_invariants(s, model)
 	D = IfElse.ifelse(D < r.D₀, r.D₀, D)
-	KI = DSB.compute_KI(r,σₘ,τ,D)
+	KI = compute_KI_invariants(r,σₘ,τ,D)
 	return KI
 end
 
@@ -148,6 +154,7 @@ end
 #######################
 #### DAMAGE GROWTH ####
 #######################
+
 Ḋ_func(s, D, p, model::M{<:CM{tW,Nothing}}) where {tW} = 0.0
 
 "damage growth rate when damage type is SimpleCharlesLaw"
@@ -196,7 +203,7 @@ function Ḋ_func(s, D, p, model::M{<:CM{tW,<:MD}}, τ_heal=Inf) where {tW}
 	KI = IfElse.ifelse(KI <= 0, zero(D), KI)
 	#(KI >= 50000) && @show D KI 
 
-  	dDdl = DSB.compute_dDdl(r,D) # damage derivative wrt crack length
+  	dDdl = compute_dDdl(r,D) # damage derivative wrt crack length
 	#(KI >= 50000) && @show dDdl 
 	
 
@@ -219,23 +226,23 @@ function η_dam_func(model,D,Ḋ)
 	return - G * f^2 / (Ḋ * df)
 end
 
+
 # plastic viscosity for constant strain rate setup
 function η_plas_func(model, s, ϵ̇, ϵₚ)
 	Δσ = sₐₓ2Δσ(model,s)
 	pc = confining_pressure(model)
 
-	# 0.5*abs(Δσ) >= sin(ϕ)(0.5*abs(Δσ) + pc) + cos(ϕ)*C 
-	# radius and center of mohr coulomb circle :
+	# radius and center of mohr coulomb circle : 0.5*abs(Δσ) >= sin(ϕ)(0.5*abs(Δσ) + pc) + cos(ϕ)*C 
 	τmc = 0.5*abs(Δσ)
 	σmc = 0.5Δσ - pc
 
     σy = plastic_yield_stress(model, -σmc, ϵₚ)
-	#ϵ̇II = ϵ̇II_func(ϵ̇, model)
+
 	if τmc >= σy
-		sy = Δσ2sₐₓ(model,2*σy)
-		η = abs(sy/(2*ϵ̇))
+		ϵ̇_eff = is3D(model) ? abs(0.75*ϵ̇) : abs(ϵ̇) # sqrt((ϵ11 - ϵ22)^2 + 4ϵ12^2) (2D Mohr-Coulomb)
+		η = abs(0.5*σy/ϵ̇_eff)
 	else
-		η = 1e30
+		η = Inf
 	end
 
 	# if model.cm.plasticity.σy isa StrainWeakenedCoulombYieldStress
@@ -248,8 +255,10 @@ end
 
 # when no plasticity, viscosity is always linked to damage
 get_viscosity(m::Model{<:CM{tW,tD,tE,Nothing}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE} = η_dam_func(m, D, Ḋ)
+
 # when elasto-plastic only
 get_viscosity(m::Model{<:CM{Nothing,Nothing,tE,tP}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tE,tP} = η_plas_func(m, s, ϵ̇, ϵₚ)
+
 # when plastic depends on the switch condition from damaged-elastic to elastic-plastic
 function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThreshold{Nothing}}}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE}
 
@@ -257,8 +266,12 @@ function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThresho
 	ηd = η_dam_func(m, D, Ḋ)
 
 	# condition on interaction of cracks
-	dKI = get_KI_from_s(s, D+1e-4, m) - get_KI_from_s(s, D, m)
-	interaction_is_dominant = dKI > 0
+	if D < p.Dmax - 1e-4
+		dKI = get_KI_from_s(s, D+1e-4, m) - get_KI_from_s(s, D, m)
+		interaction_is_dominant = dKI > 0
+	else
+		interaction_is_dominant = true
+	end
 
 	if D >= p.Dmax
 		η = ηp
@@ -271,6 +284,16 @@ function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:MinViscosityThresho
 	#println("D = ", D, ", ηd = ", ηd, ", η = ", η)
 
 	return η
+end
+
+function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{Nothing,<:DamagedViscoPlasticYieldStress}}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE}
+
+	ηp =  η_plas_func(m, s, ϵ̇, ϵₚ)
+	ηd = η_dam_func(m, D, Ḋ)
+
+	(D >= p.Dmax) * ηd
+
+	return ηp + ηd
 end
 
 function get_viscosity(m::Model{<:CM{tW,tD,tE,<:Plasticity{<:DamageThreshold}}}, s, ϵ̇, D, Ḋ, ϵₚ, p) where {tW,tD,tE}
@@ -298,7 +321,7 @@ function update_derivatives!(du,u,p,t,model::M{tCM,<:TS{tG,<:CSR}}) where {tCM,t
 	η = get_viscosity(model, s, ϵ̇, D, Ḋ, 0.0, p)
 	fw = weakening_func(D,model)
 	du[1] = 2*G*fw * (ϵ̇ - s/(2η))
-	du[2] = Ḋ 
+	du[2] = Ḋ
     du
 end
 
@@ -318,17 +341,45 @@ function update_derivatives!(du,u,p,t,model::M{<:CM{tW,tD,tE,<:P{tPT,<:SWCoulomb
 end
 
 ### Constant stress :
-"inplace derivative update function for constant strain rate test, variables are the axial strain and the damage"
+"inplace derivative update function for constant stress test, variables are the axial strain and the damage"
 function update_derivatives!(du,u,p,t,model::M{tCM,<:TS{tG,<:CS}}) where {tCM,tG}
     s = model.setup.control.s
 	ϵ, D = u
-	ϵ̇_prev = du[1]
 	Ḋ = Ḋ_func(s, D, p, model)
-	η = get_viscosity(model, s, ϵ̇_prev, D, Ḋ, 0.0, p)
-	du[1] = s/(2η)
+	#η = get_viscosity(model, s, 0.0, D, Ḋ, 0.0, p)
+	ηd = η_dam_func(model,D,Ḋ)
+	du[1] = s/(2ηd)
 	du[2] = Ḋ
     du
 end
+
+geom_ϵII_factor(setup::TriaxialSetup) = is3D(setup) ? 0.75 : 1.0
+geom_ϵII_factor(model::M) = geom_ϵII_factor(model.setup)
+
+"inplace derivative update function for constant strain rate test, variables are the axial strain and the damage"
+# function update_derivatives!(du,u,p,t,model::M{<:CM{tW,tD,tE,<:P{tPT,<:DVPY}},<:TS{tG,<:CS}}) where {tW,tD,tE,tPT,tG}
+#     s = model.setup.control.s
+# 	ϵ, D = u
+# 	Ḋ = Ḋ_func(s, D, p, model)
+# 	η = get_viscosity(model, s, 0.0, D, Ḋ, 0.0, p)
+
+# 	Δσ = sₐₓ2Δσ(model,s)
+# 	pc = confining_pressure(model)
+# 	# radius and center of mohr coulomb circle : 0.5*abs(Δσ) >= sin(ϕ)(0.5*abs(Δσ) + pc) + cos(ϕ)*C 
+# 	τmc = 0.5*abs(Δσ)
+# 	σmc = 0.5Δσ - pc
+
+# 	ηd = η_dam_func(model,D,Ḋ)
+# 	# TODO :σy = plastic_yield_stress(model, -σmc, 0.0) + 2*
+
+# 	if τmc >= σy
+# 		du[1] = (s - (sign(s)*σy/geom_ϵII_factor(model)))/(2ηd)
+# 	else
+# 		du[1] = s/(2ηd)
+# 	end
+# 	du[2] = Ḋ
+#     du
+# end
 
 ## OUT OF PLACE functions ##
 ############################

@@ -5,6 +5,53 @@ abstract type Geom end
 struct Geom2D <: Geom end
 struct Geom3D <: Geom end
 
+
+# RHEOLOGY type :
+const N = Number
+@kwdef struct Rheology{t1<:N,t2<:N,t3<:N,t4<:N,t5<:N,t6<:N,t7<:N,t8<:N,t9<:N}
+  G::t1 = 30e9
+  μ::t2 = 0.6 # Friction coef
+  β::t3 = 0.1 # Correction factor
+  K₁c::t4 = 1.74e6 # Critical stress intensity factor (Pa.m^(1/2))
+  a::t5 = 1e-3 # Initial flaw size (m)
+  ψ::t6 = atand(0.6)# crack angle to the principal stress (degree)
+  D₀::t7 = 0.1# Initial flaw density
+  n::t8 = 34.0 # Stress corrosion index
+  l̇₀::t9 = 0.24 # Ref. crack growth rate (m/s)
+end
+
+function Rheology(r::Rheology, kw::NamedTuple)
+  values_dict = Dict{Symbol,Float64}()
+  for sym in propertynames(r)
+    values_dict[sym] = isdefined(kw,sym) ? getproperty(kw,sym) : getproperty(r,sym)
+  end
+  return Rheology(; G = values_dict[:G],
+                    μ = values_dict[:μ],
+                    β = values_dict[:β],
+                    K₁c = values_dict[:K₁c],
+                    a = values_dict[:a],
+                    ψ = values_dict[:ψ],
+                    D₀ = values_dict[:D₀],
+                    n = values_dict[:n],
+                    l̇₀ = values_dict[:l̇₀])
+end
+
+Base.Broadcast.broadcastable(r::Rheology) = Ref(r)
+
+function Base.show(io::IO, ::MIME"text/plain", r::Rheology)
+  print(io, "Rheology instance with fields :\n",
+  "\t├── G (shear modulus)                             : $(r.G)\n",
+  "\t├── μ (flaws friction coefficient)                : $(r.μ)\n",
+  "\t├── β (correction factor)                         : $(r.β)\n",
+  "\t├── K₁c (fracture toughness)                      : $(r.K₁c)\n",
+  "\t├── a (flaws radius)                              : $(r.a)\n",
+  "\t├── ψ (flaws angle wrt σ₁ in degree)              : $(r.ψ)\n",
+  "\t├── D₀ (initial damage, constrains flaws density) : $(r.D₀)\n",
+  "\t├── n (stress corrosion index)                    : $(r.n)\n",
+  "\t├── l̇₀ (ref crack growth rate in m/s)             : $(r.l̇₀)\n")
+end
+
+
 # Smoother types
 abstract type Smoother end
 
@@ -48,7 +95,7 @@ abstract type NumericalSetup end
     control::tC = ConstantStrainRate()
     pc::tP = 1e5
 end
-
+control(ns::NumericalSetup) = ns.control
 
 # weakening types
 abstract type Weakening end
@@ -88,6 +135,13 @@ function (σy::StrainWeakenedCoulombYieldStress)(p,ϵₚ)
     ϕ = atan(μ)
     p*sin(ϕ) + C*cos(ϕ)
 end
+
+@kwdef struct DamagedViscoPlasticYieldStress{tμ<:Real,tC<:Real} <: YieldStress 
+    μ::tμ = 0.6
+    C::tC = 0.0
+end
+(σy::DamagedViscoPlasticYieldStress)(p) = (ϕ = atan(σy.μ) ; p*sin(ϕ) + σy.C*cos(ϕ))
+
 # helper func:
 (σy::YieldStress)(p,ϵₚ) = σy(p)
 
@@ -103,11 +157,11 @@ end
 abstract type MicroMechanicalCharlesLaw <: DamageGrowth end
 "Damage mechanics where KI is formulated using stress invariants"
 @kwdef struct InvariantsKICharlesLaw <: MicroMechanicalCharlesLaw
-    r::Rheology = DSB.Rheology() # Type containing micromechanical parameters defined in DamagedShearBand.jl along with damage functions used to evaluate KI 
+    r::Rheology = Rheology() # Type containing micromechanical parameters defined in DamagedShearBand.jl along with damage functions used to evaluate KI 
 end
 "Damage mechanics where KI is formulated using principal stresses, only works in the 2D case"
 @kwdef struct PrincipalKICharlesLaw <: MicroMechanicalCharlesLaw
-    r::Rheology = DSB.Rheology() # Type containing micromechanical parameters defined in DamagedShearBand.jl along with damage functions used to evaluate KI 
+    r::Rheology = Rheology() # Type containing micromechanical parameters defined in DamagedShearBand.jl along with damage functions used to evaluate KI 
 end
 
 
@@ -118,7 +172,7 @@ abstract type Elasticity end
 end
 
 # Plasticity related types 
-#TODO : !!!!!!!!!
+
 abstract type PlasticityThreshold end
 @kwdef struct MinViscosityThreshold{tS<:Maybe(SwitchSmoother)} <: PlasticityThreshold 
     smoother::tS = nothing
@@ -149,6 +203,10 @@ end
     cm::tCM = ConstitutiveModel()
     setup::tNS = TriaxialSetup()
 end
+Model(m::Model,cm::ConstitutiveModel) = Model(cm,m.setup)
+Model(m::Model,setup::NumericalSetup) = Model(m.cm,setup)
+
+control(m::Model) = m.setup.control
 #Model{tCM,tNS}(cm,setup) where {tCM,tNS} = Model(cm,setup)
 
 # ALIASES
@@ -166,10 +224,13 @@ const EBW = EnergyBasedWeakening
 const ConstY = ConstantYieldStress
 const CoulombY = CoulombYieldStress
 const SWCoulombY = StrainWeakenedCoulombYieldStress
+const DVPY = DamagedViscoPlasticYieldStress
+const DG = DamageGrowth
 const SD = SimpleCharlesLaw
 const MD = MicroMechanicalCharlesLaw
 const IKI = InvariantsKICharlesLaw
 const PKI = PrincipalKICharlesLaw
+const E = Elasticity
 const IE = IncompressibleElasticity
 const P = Plasticity
 const MVT = MinViscosityThreshold
