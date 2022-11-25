@@ -1,4 +1,4 @@
-module SimpleDamage
+module SCAM
 
 using Base: @kwdef
 using StaticArrays
