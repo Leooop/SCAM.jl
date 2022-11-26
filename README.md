@@ -23,14 +23,14 @@ Requires Julia v1.7 or higher
 
 #### Introduction
 
-This rheological model considers the growth of tensile cracks in a compressive state of stress,based on the wing-crack model of Ashby & Sammis (1991) coupled with a sub-critical crack growth law (Charles, 1958).
-The material is assumed elastically incompressible, in view of a use in long-term tectonic simulations.
+This rheological model considers the growth of tensile cracks in a compressive stress state, based on the wing-crack model of Ashby & Sammis (1991) coupled with a sub-critical crack growth law (Charles, 1958).
+Although tensile crack growth is associated with material dilatancy, the material is assumed elastically incompressible, in view of a use in long-term tectonic simulations.
 It uses an empirical linear dependance of the shear modulus on damage $D = \frac{4}{3}\pi N_v (l+\alpha a)^3$, were $N_v$ is the number of cracks per unit volume, $l$ is the length of each tensile crack growing from the tips of closed penny-shaped cracks of radius $a$ and oriented at an angle $\psi=\cos^{-1}{\alpha}$.
 The penny-shaped cracks normals are assumed to be be contained in the $\sigma_1$-$\sigma_3$ plane, such that long term behavior post crack coalescence (at $D \sim  1$) can be represented by 2-dimentional Mohr-Coulomb plasticity in the same plane.
 
 This model in the 0-D approximation is able to accurately describe the deformation of compact rocks under various confining pressures, strains rate and under creep conditions (stress kept constant). The dependence of temperature is, for now, not implemented.
 
-This model can be coupled with the unregistered packages [DataFormatter.jl](https://github.com/Leooop/DataFormatter.jl) and [ParametersEstimator.jl](https://github.com/Leooop/ParametersEstimator.jl) to perform bayesian parameters inversion against triaxial experimental data under constant strain rate or brittle creep conditions.
+Coupled with the unregistered packages [DataFormatter.jl](https://github.com/Leooop/DataFormatter.jl) and [ParametersEstimator.jl](https://github.com/Leooop/ParametersEstimator.jl), This model can be used to perform bayesian parameters inversion against triaxial experimental data under constant strain rate or brittle creep conditions.
 
 #### Usage
 
@@ -162,7 +162,8 @@ class StrainWeakenedCoulombYieldStress {
 
 #### Examples
 
-Let's load `SCAM`, an ODE solver and a plotting package
+##### Constant axial strain rate axisymmetric simulation
+Let's load `SCAM`, an ODE solver library and a plotting package
 
 ```julia
 using SCAM
@@ -170,17 +171,20 @@ using OrdinaryDiffEq
 using Plots
 ```
 
-Let's assume that we want to model the mechanical behavior of a rock under axisymmetric loading (i.e. $\sigma_2 = \sigma_3 =$ 50 MPa) and constant axial strain rate of $-10^{-5}~$s$^{-1}$.
+Let's assume that we want to model the mechanical behavior of a rock under axisymmetric loading (i.e. $\sigma_2 = \sigma_3 =$ 50 MPa) and constant axial strain rate of $-10^{-5}~$s${}^{-1}$.
 
 We need a `NumericalSetup` type corresponding to the above conditions :
 
 ```julia
+ϵ̇ = -1e-5
 setup = TriaxialSetup(
     geom = Geom3D(),
-    control = ConstantStrainRate(-1e-5)
+    control = ConstantStrainRate(ϵ̇),
     pc = 50e6
 ) 
 ```
+
+Note that if we used `Geom2D()` instead of `Geom3D()`, a plane-strain setup would be generated, thus still a 3-D approximation.
 
 We seek to model the damaged-elastic part of the deformation with Incompressible elasticity and a shear modulus of 30 GPa :
 
@@ -191,7 +195,7 @@ elast = IncompressibleElasticity(G = 30e9)
 Assume penny-shaped cracks of radius $a=0.5~$mm and oriented at an angle $\psi = 45°$ (actually the only possible value) are initially present in the material and are characterized by damage $D_0 = 0.2$ (function of their number per unit volume). 
 
 ```julia
-mmp = MicromechanicalParameters(
+mmp = MicroMechanicalParameters(
         μ=0.7, 
         ψ=45, 
         a=0.5e-3, 
@@ -230,13 +234,13 @@ cm = ConstitutiveModel(
 )
 ```
 
-An finally the full model, with the setup informations
+and finally the full model, also using the setup informations :
 
 ```julia
 model = Model(cm,setup)
 ```
 
-The coupled integration of axial stress and damage is then performed using
+The coupled integration of axial stress and damage is then performed invoquing
 
 ```julia 
 sol = simulate(model, tspan; 
@@ -252,6 +256,28 @@ sol = simulate(model, tspan;
 ) 
 ```
 
-The sol return variable is the Solution type ouput by `OrdinaryDiffEq` we can straightforwardly plot it
+The `sol` return variable is the `Solution` type ouput by `OrdinaryDiffEq`. We can straightforwardly plot it :
+
+```julia
+ϵs = -sol.t.*ϵ̇.*100 # in %
+σs = -sol[1,:]./1e6 # in MPa
+Ds = sol[2,:]
+plot(ϵs, σs,
+    c=:black,
+    lw=2,
+    label="",
+    xlabel = "axial strain (%)",
+    ylabel = "axial stress (MPa)"
+)
+plot!(twinx(), ϵs, Ds,
+    c = :firebrick,
+    lw=2,
+    label = "",
+    ylabel= "damage"
+)
+```
+
+![](stress_strain.svg)
+
 
 

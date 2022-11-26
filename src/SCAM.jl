@@ -8,14 +8,16 @@ using Requires
 include("types.jl")
 include("damage_functions.jl")
 include("functions.jl")
+include("simulation_helpers.jl")
+include("dataset_simulation.jl")
 
 # only conditionally depend on the heavy OrdinaryDiffEq
-function __init__()
-    @require OrdinaryDiffEq="1dea7af3-3e70-54e6-95c3-0bf5283fa5ed" begin
-        include("simulation_helpers.jl")
-        include("dataset_simulation.jl")
-    end 
-end
+# function __init__()
+#     @require OrdinaryDiffEq="1dea7af3-3e70-54e6-95c3-0bf5283fa5ed" begin
+#         include("simulation_helpers.jl")
+#         include("dataset_simulation.jl")
+#     end 
+# end
 
 export Model, MicroMechanicalParameters, NumericalSetup, TriaxialSetup, DeformationControl, ConstantStrainRate, ConstantStress, ConstitutiveModel, LinearWeakening, AsymptoticWeakening, EnergyBasedWeakening
 export ConstantYieldStress, CoulombYieldStress, StrainWeakenedCoulombYieldStress, SimpleCharlesLaw, InvariantsKICharlesLaw, PrincipalKICharlesLaw, MicroMechanicalCharlesLaw, Elasticity, IncompressibleElasticity, Geom2D, Geom3D
