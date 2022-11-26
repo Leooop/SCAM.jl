@@ -1,4 +1,3 @@
-using DataFormatter
 using DataFrames
 using OrdinaryDiffEq
 using NamedArrays

@@ -7,6 +7,7 @@ version = "0.1.0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 NamedArrays = "86f7a689-2022-50b4-a561-43c23ac3c673"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 

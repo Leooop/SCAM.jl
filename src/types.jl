@@ -19,6 +19,7 @@ const N = Number
   n::t8 = 34.0 # Stress corrosion index
   l̇₀::t9 = 0.24 # Ref. crack growth rate (m/s)
 end
+const MicroMechanicalParameters = Rheology
 
 function Rheology(r::Rheology, kw::NamedTuple)
   values_dict = Dict{Symbol,Float64}()
