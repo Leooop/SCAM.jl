@@ -32,7 +32,7 @@ This model in the 0-D approximation is able to accurately describe the deformati
 
 Coupled with the unregistered packages [DataFormatter.jl](https://github.com/Leooop/DataFormatter.jl) and [ParametersEstimator.jl](https://github.com/Leooop/ParametersEstimator.jl), This model can be used to perform bayesian parameters inversion against triaxial experimental data under constant strain rate or brittle creep conditions.
 
-#### Usage
+#### Model architecture
 
 The top level `Model` type displays the following type hierarchy :
 
@@ -162,6 +162,8 @@ class StrainWeakenedCoulombYieldStress {
 
 #### Examples
 
+The code in this section can also be found in the [example](https://github.com/Leooop/SCAM.jl/tree/master/examples) folder.
+
 ##### Constant axial strain rate axisymmetric simulation
 Let's load `SCAM`, an ODE solver library and a plotting package
 
@@ -240,12 +242,13 @@ and finally the full model, also using the setup informations :
 model = Model(cm,setup)
 ```
 
-The coupled integration of axial stress and damage is then performed invoquing
+The coupled integration of axial stress and damage is then performed up to $530~$s by invoquing
 
 ```julia 
+tspan = (0.0, 530)
 sol = simulate(model, tspan; 
         solver = Tsit5(), # ODE solver
-        saveat = [], 
+        saveat = range(0, tspan[2]; length=500), 
         abstol = 1e-6,
         reltol = 1e-4,
         maxiters = 1e5,
@@ -256,18 +259,26 @@ sol = simulate(model, tspan;
 ) 
 ```
 
+If you want to use you own ODE solver, the package also provides the lower level function 
+
+```julia
+update_derivatives!(du::Vector,u::Vector,p::NamedTuple,t::Any,model::Model)
+```
+
+returning the relevant vector of time derivatives `du` from state `u` and model `model`. `p` must be a `NamedTuple` containing the field `Dmax`. Overall for Constant strain rate models the state vector contains the axial deviatoric stress and damage, whereas for constant stress setup, the deviatoric stress is replaced by the creep strain rate. `t` can be input anything, it is not used, and is there to satisfy `OrdinaryDiffEq.jl` interface.
+
 The `sol` return variable is the `Solution` type ouput by `OrdinaryDiffEq`. We can straightforwardly plot it :
 
 ```julia
 ϵs = -sol.t.*ϵ̇.*100 # in %
-σs = -sol[1,:]./1e6 # in MPa
+σs = sol[1,:]
 Ds = sol[2,:]
-plot(ϵs, σs,
+plot(ϵs, -σs./1e6,
     c=:black,
     lw=2,
     label="",
     xlabel = "axial strain (%)",
-    ylabel = "axial stress (MPa)"
+    ylabel = "axial deviatoric stress (MPa)"
 )
 plot!(twinx(), ϵs, Ds,
     c = :firebrick,
@@ -280,4 +291,69 @@ plot!(twinx(), ϵs, Ds,
 ![](stress_strain.svg)
 
 
+##### Constant stress (brittle creep) axisymmetric simulation
 
+In order to model the brittle creep (also referred to as static fatigue) behavior of the same material under the same confining pressure, we need to get the rock to the desired stress and then keek the axial stress fixed. Let's evaluate brittle creep behavior at $\sigma_c = 200$ MPa. We can reuse previous results to obtain the damage state at this stress level :
+
+```julia 
+creep_stress = -200e6
+σs_to_peak = σs[1:findfirst(diff(σs).>= 0)]
+id = argmin(abs.(σs_to_peak .- creep_stress))
+
+σc = σs[id]
+Dᵢc = Ds[id]
+```
+
+We then create a new constant stress setup and reinstantiate a model,
+
+```julia 
+setup_creep = TriaxialSetup(
+    geom = Geom3D(),
+    control = ConstantStress(σc),
+    pc = 50e6
+) 
+
+model_creep = Model(cm,setup_creep)
+```
+
+integrate again (notice the initial damage initialized at $D_i c$)
+
+```julia 
+tspan = (0.0, 1500)
+sol_creep = simulate(model_creep, tspan; 
+        solver = Tsit5(), # ODE solver
+        saveat = range(0, tspan[2]; length=500), 
+        abstol = 1e-6,
+        reltol = 1e-4,
+        maxiters = 1e5,
+        Dᵢ = Dᵢc, # if nothing D(t0) = D0
+        Dmax=0.95,
+        stop_at_peak = false,
+        cb=nothing # whatever DiffEq Callback. If nothing, uses the appropriate callbacks
+) 
+```
+
+and plot !
+
+```julia
+ts_creep = sol_creep.t
+ϵs_creep = -sol_creep[1,:].*100 # in %
+Ds_creep = sol_creep[2,:]
+
+plot(ts_creep, ϵs_creep,
+    c=:black,
+    lw=2,
+    label="strain",
+    legend =:topleft,
+    xlabel = "time (s)",
+    ylabel = "axial creep strain (%)"
+)
+plot!(twinx(), ts_creep, Ds_creep,
+    c = :firebrick,
+    lw=2,
+    label = "",
+    ylabel= "damage"
+)
+```
+
+![](creep_strain.svg)

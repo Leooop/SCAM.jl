@@ -48,7 +48,7 @@ function get_callbacks(model, p ; stop_at_peak=false)
     stop_at_peak && return stop_at_peak_callback(model, p)
     simtype = typeof(control(model))
     if simtype <: ConstantStrainRate
-        cb = damage_limiter_callback(model, p)
+        cb = isnothing(model.cm.plasticity) ? terminate_at_Dmax_callback(model, p) : damage_limiter_callback(model, p)
     elseif simtype <: ConstantStress
         cb = terminate_at_Dmax_callback(model, p)
     end
