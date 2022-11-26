@@ -3,6 +3,7 @@ module SCAM
 using Base: @kwdef
 using StaticArrays
 using IfElse
+using Requires
 
 function __init__()
     @require OrdinaryDiffEq="1dea7af3-3e70-54e6-95c3-0bf5283fa5ed" begin
@@ -14,8 +15,6 @@ end
 include("types.jl")
 include("damage_functions.jl")
 include("functions.jl")
-include("dataset_simulation.jl")
-include("simulation_helpers.jl")
 
 export Model, Rheology, NumericalSetup, TriaxialSetup, DeformationControl, ConstantStrainRate, ConstantStress, ConstitutiveModel, LinearWeakening, AsymptoticWeakening, EnergyBasedWeakening
 export ConstantYieldStress, CoulombYieldStress, StrainWeakenedCoulombYieldStress, SimpleCharlesLaw, InvariantsKICharlesLaw, PrincipalKICharlesLaw, MicroMechanicalCharlesLaw, Elasticity, IncompressibleElasticity, Geom2D, Geom3D

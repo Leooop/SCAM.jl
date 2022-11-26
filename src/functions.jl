@@ -38,7 +38,7 @@ init_variables(m::Model{<:CM{<:W,<:DG,<:E,Nothing}}, Dᵢ) = init_variables(m.cm
 
 const DMAX_DEFAULT = 0.95
 init_params(::Model{<:CM{tW,tD,tE,Nothing}} ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
-init_params(::Model ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
+#init_params(::Model ; Dmax=DMAX_DEFAULT) = (;Dmax)
 # init_params(::Model{<:CM{tW,tD,tE,<:P{<:DT}}}  ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 # init_params(::Model{<:CM{tW,tD,tE,<:P{<:MVT}}} ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 
