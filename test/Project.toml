@@ -1,5 +1,4 @@
 [deps]
-DamagedShearBand = "45aa19b2-dc3c-4cb9-a9f3-5fc87f1f803e"
+SACM = "f686658c-dc36-4874-89a4-43681556eb03"
 NamedArrays = "86f7a689-2022-50b4-a561-43c23ac3c673"
-SimpleDamage = "f686658c-dc36-4874-89a4-43681556eb03"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

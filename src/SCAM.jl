@@ -4,8 +4,12 @@ using Base: @kwdef
 using StaticArrays
 using IfElse
 
-using Reexport
-#@reexport using DamagedShearBand: Rheology
+function __init__()
+    @require OrdinaryDiffEq="1dea7af3-3e70-54e6-95c3-0bf5283fa5ed" begin
+        include("simulation_helpers.jl")
+        include("dataset_simulation.jl")
+    end
+end
 
 include("types.jl")
 include("damage_functions.jl")

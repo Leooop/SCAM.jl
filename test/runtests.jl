@@ -1,12 +1,11 @@
-using SimpleDamage ; import SimpleDamage as SD
+using SCAM ; import SCAM as SD
 using NamedArrays
-import DamagedShearBand as DSB
 using Test
 
 pp =   [8.4e9, 0.8, 0.55, 2e-3, 0.4, 20.0, 1.014e6, 0.001, 0.4]
 pp_names = [:G,   :γ,   :μ,   :a,  :D₀, :n,   :K₁c,   :l̇₀,   :Dᵢ]
 pn = NamedArray(pp,pp_names)
-r = DSB.Rheology(μ=pn[:μ], ψ=45, a=pn[:a], D₀=pn[:D₀], n=pn[:n], K₁c=pn[:K₁c], l̇₀=pn[:l̇₀])
+r = Rheology(μ=pn[:μ], ψ=45, a=pn[:a], D₀=pn[:D₀], n=pn[:n], K₁c=pn[:K₁c], l̇₀=pn[:l̇₀])
 pc = 1e6
 ϵ̇ = 1e-5
 s = 1e8
@@ -155,7 +154,7 @@ end
         let s = -μ*pc/(1-μ)#- μ*pc/(0.5*(sqrt(3) - μ))
             τ, σₘ = SD.stress_invariants(s, m)
             # at D = D0 and τ/σ=μ -> KI = O
-            @test DSB.compute_KI(r,σₘ,τ,D₀) ≈ 0
+            @test compute_KI(r,σₘ,τ,D₀) ≈ 0
             @test SD.get_KI_from_s(s, D₀, m) ≈ 0
         end
     end
@@ -170,7 +169,7 @@ end
         let s = - μ*pc/(0.5*(sqrt(3) - μ))
             τ, σₘ = SD.stress_invariants(s, m)
             # at D = D0 and τ/σ=μ -> KI = O
-            @test isapprox(DSB.compute_KI(r,σₘ,τ,D₀), 0, atol=1e-10)
+            @test isapprox(compute_KI(r,σₘ,τ,D₀), 0, atol=1e-10)
             @test isapprox(SD.get_KI_from_s(s, D₀, m), 0, atol=1e-10)
         end
     end
