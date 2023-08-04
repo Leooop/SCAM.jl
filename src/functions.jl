@@ -38,7 +38,7 @@ init_variables(m::Model{<:CM{<:W,<:DG,<:E,Nothing}}, Dᵢ) = init_variables(m.cm
 
 const DMAX_DEFAULT = 0.95
 init_params(::Model{<:CM{tW,tD,tE,Nothing}} ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
-#init_params(::Model ; Dmax=DMAX_DEFAULT) = (;Dmax)
+init_params(::Model ; Dmax=DMAX_DEFAULT) = (;Dmax)
 # init_params(::Model{<:CM{tW,tD,tE,<:P{<:DT}}}  ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 # init_params(::Model{<:CM{tW,tD,tE,<:P{<:MVT}}} ; Dmax=DMAX_DEFAULT) where {tW,tD,tE} = (;Dmax)
 
@@ -120,14 +120,15 @@ weakening_derivative(D,m::Model) = weakening_derivative(D,m.cm)
 weakening_func(D,m::M{<:CM{Nothing}}) = 1.0
 weakening_derivative(D,m::M{<:CM{Nothing}}) = 0.0
 
-# function get_energy_based_G(D, τ, σ, s₁₂, model::M{<:CM{<:EBW,<:IKI}})
-# 	r = model.cm.damage.r
-# 	G = model.cm.elasticity.G
-# 	A, B = DSB.compute_AB(r,D)
-# 	A1, B1 = DSB.compute_A1B1(r,A,B)
-# 	#return 1 / ( 1/(4G) * ( 1 + (B1/2) * (B1 + A1*σ/τ - A1*σ*s₁₂^2/τ^3) ) )
-# 	return 1/(1 + B1^2/2 + A1*B1*σ /(2*τ))
-# end
+function get_energy_based_G(ϵ, D, model) #::M{<:CM{<:EBW,<:IKI}}
+	r = model.cm.damage.r
+	G = model.cm.elasticity.G
+	A1, B1 = compute_A1B1_alt(r,D)
+   	Γ = compute_Γ(r,A1,B1)
+   	ϵkk = 0.0 # TODO : explore what happens with damage induced dilatancy
+	eII = is3D(model) ? sqrt(3)*abs(ϵ) : 2*abs(ϵ1) # strain invariant from harsha = √(2 eij eij)
+   	return G/Γ * (3*(1-2r.ν)/(2*(1+r.ν)) + A1^2/2 - A1*B1*ϵkk/2eII) # Cμ from Bhat, == G in 0D
+end
 
 #############
 #### KI  ####
