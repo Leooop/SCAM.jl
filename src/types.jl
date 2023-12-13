@@ -9,7 +9,6 @@ struct Geom3D <: Geom end
 # RHEOLOGY type :
 const N = Number
 @kwdef struct Rheology{t1<:N,t2<:N,t3<:N,t4<:N,t5<:N,t6<:N,t7<:N,t8<:N,t9<:N}
-  G::t1 = 30e9
   μ::t2 = 0.6 # Friction coef
   β::t3 = 0.1 # Correction factor
   K₁c::t4 = 1.74e6 # Critical stress intensity factor (Pa.m^(1/2))
@@ -26,8 +25,7 @@ function Rheology(r::Rheology, kw::NamedTuple)
   for sym in propertynames(r)
     values_dict[sym] = isdefined(kw,sym) ? getproperty(kw,sym) : getproperty(r,sym)
   end
-  return Rheology(; G = values_dict[:G],
-                    μ = values_dict[:μ],
+  return Rheology(; μ = values_dict[:μ],
                     β = values_dict[:β],
                     K₁c = values_dict[:K₁c],
                     a = values_dict[:a],
@@ -40,8 +38,7 @@ end
 Base.Broadcast.broadcastable(r::Rheology) = Ref(r)
 
 function Base.show(io::IO, ::MIME"text/plain", r::Rheology)
-  print(io, "Rheology instance with fields :\n",
-  "\t├── G (shear modulus)                             : $(r.G)\n",
+  print(io, "MicroMechanicalParameters instance with fields :\n",
   "\t├── μ (flaws friction coefficient)                : $(r.μ)\n",
   "\t├── β (correction factor)                         : $(r.β)\n",
   "\t├── K₁c (fracture toughness)                      : $(r.K₁c)\n",
