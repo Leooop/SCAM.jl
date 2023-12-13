@@ -32,6 +32,35 @@ This model in the 0-D approximation is able to accurately describe the deformati
 
 Coupled with the unregistered packages [DataFormatter.jl](https://github.com/Leooop/DataFormatter.jl) and [ParametersEstimator.jl](https://github.com/Leooop/ParametersEstimator.jl), This model can be used to perform bayesian parameters inversion against triaxial experimental data under constant strain rate or brittle creep conditions.
 
+#### Get started
+
+To simulate the mechanical behavior of a damaged material, you first need to build a `Model` Instance. 
+The `Model` constructor takes two arguments : 
+- A `ConstitutiveModel` instance, representing the rheology of the material
+- A `NumericalSetup` instance, including the geometry of the problem and setting control parameters for the simulation.
+
+The class diagram of the next section helps understanding types relationships within this `Model` type. 
+
+Once you created your `model::Model` instance, you just need to call 
+
+```julia 
+tspan = (0.0, 530)
+sol = simulate(model, tspan; 
+        solver = Tsit5(), # ODE solver
+        saveat = range(0, tspan[2]; length=500), # array of times saved in sol
+        abstol = 1e-6, # absolute tolerance of the solver
+        reltol = 1e-4, # relative tolerance of the solver
+        maxiters = 1e5, # maximum number of solver iterations
+        Dᵢ=nothing, # initial damage (if not specified or nothing: D(t0) = D0)
+        Dmax=0.95, # maximum damage value
+        stop_at_peak = false, # whether the solver should stop when peak stress is achieved
+        cb=nothing # DiffEq Callbacks. If nothing, uses default callbacks appropriate to the NumericalSetup of the Model
+) 
+```
+
+
+
+
 #### Model architecture
 
 The top level `Model` type displays the following type hierarchy :
@@ -39,13 +68,14 @@ The top level `Model` type displays the following type hierarchy :
 ```mermaid
 classDiagram
 direction TB
-Model --> ConstitutiveModel 
-Model --> NumericalSetup
 
-ConstitutiveModel  --> Weakening
-ConstitutiveModel  --> DamageGrowth
-ConstitutiveModel  --> Elasticity
-ConstitutiveModel  --> Plasticity
+Model *-- ConstitutiveModel 
+Model *-- NumericalSetup
+
+ConstitutiveModel  *-- Weakening
+ConstitutiveModel  *-- DamageGrowth
+ConstitutiveModel  *-- Elasticity
+ConstitutiveModel  *-- Plasticity
 
 Weakening --> LinearWeakening
 Weakening --> AsymptoticWeakening
@@ -54,22 +84,22 @@ DamageGrowth --> SimpleCharlesLaw
 DamageGrowth --> MicroMechanicalCharlesLaw
 MicroMechanicalCharlesLaw --> InvariantsKICharlesLaw
 MicroMechanicalCharlesLaw --> PrincipalKICharlesLaw
-InvariantsKICharlesLaw --> Rheology
-PrincipalKICharlesLaw --> Rheology
+InvariantsKICharlesLaw *-- MicroMechanicalParameters
+PrincipalKICharlesLaw *-- MicroMechanicalParameters
 
 Elasticity --> IncompressibleElasticity
 
-Plasticity --> PlasticityThreshold
+Plasticity *-- PlasticityThreshold
 PlasticityThreshold --> MinViscosityThreshold
 PlasticityThreshold --> DamageThreshold
-Plasticity --> YieldStress
+Plasticity *-- YieldStress
 YieldStress --> ConstantYieldStress
 YieldStress --> CoulombYieldStress
 YieldStress --> StrainWeakenedCoulombYieldStress
 
 NumericalSetup --> TriaxialSetup
-TriaxialSetup --> Geom
-TriaxialSetup --> DeformationControl
+TriaxialSetup *-- Geom
+TriaxialSetup *-- DeformationControl
 DeformationControl --> ConstantStrainRate
 DeformationControl --> ConstantStress
 
@@ -77,9 +107,7 @@ Geom --> Geom2D
 Geom --> Geom3D
 
 
-
-
-class Model {
+class Model:::styleClass {
     cm : ConstitutiveModel
     setup : NumericalSetup
 }
@@ -106,9 +134,16 @@ class ConstantStrainRate {ϵ̇ : Real}
 class ConstantStress {s : Real}
 
 
-
+class Weakening {<<abstract type>>}
 class LinearWeakening {γ : Real}
 class AsymptoticWeakening {γ : Real}
+
+note for LinearWeakening "Weakening of the 
+shear modulus
+is Linear in damage"
+note for AsymptoticWeakening "Weakening of (1/G)
+is Linear in damage"
+
 
 class SimpleCharlesLaw {
     Td : Real
@@ -118,9 +153,11 @@ class SimpleCharlesLaw {
 }
 class DamageGrowth {<<abstract type>>}
 class MicroMechanicalCharlesLaw {<<abstract type>>}
-class PrincipalKICharlesLaw {r : Rheology}
-class InvariantsKICharlesLaw {r : Rheology}
-class Rheology {
+class PrincipalKICharlesLaw {
+    r : MicroMechanicalParameters
+}
+class InvariantsKICharlesLaw {r : MicroMechanicalParameters}
+class MicroMechanicalParameters {
     μ : Real
     β : Real
     K₁c : Real
@@ -136,7 +173,7 @@ class Elasticity {<<abstract type>>}
 class IncompressibleElasticity {G : Real}
 
 class Plasticity {
-    threshold : Union(PlasticityThreshold, Nothing)
+    threshold : PlasticityThreshold | Nothing
     σy : YieldStress
 }
 
