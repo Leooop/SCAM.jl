@@ -88,3 +88,37 @@ compute_A1psi(r) = 0.5*π * sind(r.ψ) * (r.μ*(cosd(2*r.ψ) - 1) + sind(2*r.ψ)
 compute_A3psi(r) = 0.5*π * sind(r.ψ) * (r.μ*(cosd(2*r.ψ) + 1) + sind(2*r.ψ))
 compute_A1A3psi(r::Rheology) = (compute_A1psi(r), compute_A3psi(r))
 ##################
+
+
+# for energy based shear modulus :
+
+# eq 15 Bhat2012 (A1 : *c2*c3), Perol&Bhat2016 (A1 : ...*c2)*c3):
+# Perol&Bhat2016 is the corrected version, and the one implemented
+compute_A_alt(r::Rheology,c1,c2,c3) = r.μ*c1 + (1 + r.μ*c2)*c3
+compute_B_alt(c1,c2,c3) = c1 + c2*c3
+
+function compute_AB_alt(r::Rheology,c1,c2,c3)
+  A = compute_A_alt(r,c1,c2,c3)
+  B = compute_B_alt(c1,c2,c3)
+  return A, B
+end
+compute_AB_alt(r::Rheology,D) = compute_AB_alt(r,compute_c1c2c3(r,D)...)
+
+# eq 11 in Harsha's notes :
+compute_A1_alt(r::Rheology,A) = A * sqrt((π*r.D₀*(1 - r.ν))/cosd(r.ψ)^3)
+compute_B1_alt(r::Rheology,B) = B * sqrt((π*r.D₀*(1 - r.ν))/cosd(r.ψ)^3)
+
+# Bhat 2012
+# compute_A1(r::Rheology,A) = A * sqrt((π*r.D₀)/(cosd(r.ψ)^3*(1 - r.ν)))
+# compute_B1(r::Rheology,B) = B * sqrt((π*r.D₀)/(cosd(r.ψ)^3*(1 - r.ν)))
+
+function compute_A1B1_alt(r::Rheology,A,B)
+  A1 = compute_A1_alt(r,A)
+  B1 = compute_B1_alt(r,B)
+  return A1, B1
+end
+compute_A1B1_alt(r::Rheology,D) = compute_A1B1_alt(r,compute_AB_alt(r,D)...)
+
+function compute_Γ(r::Rheology,A₁,B₁)
+    return (3*(1-2r.ν))/(2*(1+r.ν)) + (3*(1-2r.ν)*B₁^2)/(4*(1+r.ν)) + A₁^2/2
+end

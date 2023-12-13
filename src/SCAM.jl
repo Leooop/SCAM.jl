@@ -19,7 +19,7 @@ include("dataset_simulation.jl")
 #     end 
 # end
 
-export Model, MicroMechanicalParameters, NumericalSetup, TriaxialSetup, DeformationControl, ConstantStrainRate, ConstantStress, ConstitutiveModel, LinearWeakening, AsymptoticWeakening, EnergyBasedWeakening
+export Model, MicroMechanicalParameters, NumericalSetup, TriaxialSetup, DeformationControl, ConstantStrainRate, ConstantStress, ConstitutiveModel, LinearWeakening, AsymptoticWeakening, EnergyBasedWeakening, Rheology
 export ConstantYieldStress, CoulombYieldStress, StrainWeakenedCoulombYieldStress, SimpleCharlesLaw, InvariantsKICharlesLaw, PrincipalKICharlesLaw, MicroMechanicalCharlesLaw, Elasticity, IncompressibleElasticity, Geom2D, Geom3D
 export Plasticity, MinViscosityThreshold, DamageThreshold
 export update_derivatives, update_derivatives!

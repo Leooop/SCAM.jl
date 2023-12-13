@@ -18,7 +18,7 @@ function simulate(model, tspan;
     prob = ODEProblem(update!, init_variables(model,Dᵢ), tspan, p)
 
     cb = !isnothing(cb) ? cb : get_callbacks(model, p ; stop_at_peak)
-    sol = solve(prob, solver;#Tsit5() ;#Tsit5(); SSPRK83(), KenCarp4(autodiff=false)
+    sol = solve(prob, solver; #Tsit5() ;#Tsit5(); SSPRK83(), KenCarp4(autodiff=false)
             saveat,
             abstol,
             reltol,
