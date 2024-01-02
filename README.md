@@ -28,12 +28,27 @@ Requires Julia v1.7 or higher
 
 #### Introduction
 
-This rheological model considers the growth of tensile cracks in a compressive stress state, based on the wing-crack model of Ashby & Sammis (1991) coupled with a sub-critical crack growth law (Charles, 1958).
-Although tensile crack growth is associated with material dilatancy, the material is assumed elastically incompressible, in view of a use in long-term tectonic simulations.
-It uses an empirical linear dependance of the shear modulus on damage $D = \frac{4}{3}\pi N_v (l+\alpha a)^3$, were $N_v$ is the number of cracks per unit volume, $l$ is the length of each tensile crack growing from the tips of closed penny-shaped cracks of radius $a$ and oriented at an angle $\psi=\cos^{-1}{\alpha}$.
-The penny-shaped cracks normals are assumed to be be contained in the $\sigma_1$-$\sigma_3$ plane, such that long term behavior post crack coalescence (at $D \sim  1$) can be represented by 2-dimentional Mohr-Coulomb plasticity in the same plane.
+This rheological model considers the growth of tensile cracks in a compressive stress state, based on the wing-crack model of [Ashby and Sammis (1990)](https://link.springer.com/article/10.1007/BF00878002) coupled with a sub-critical crack growth law (Charles, 1958) and an a coupling between the internal state of damage of the material and its shear modulus.
 
-This model in the 0-D approximation is able to accurately describe the deformation of compact rocks under various confining pressures, strains rate and under creep conditions (stress kept constant). The dependence of temperature is, for now, not implemented.
+It uses an empirical linear dependency of the shear modulus on damage $D = \frac{4}{3}\pi N_v (l+\alpha a)^3$, were $N_v$ is the number of cracks per unit volume, $l$ is the length of each tensile crack growing from the tips of closed penny-shaped cracks of radius $a$ and oriented at an angle $\psi=\cos^{-1}{\alpha}$.
+
+The penny-shaped cracks normals are assumed to be be contained in the $\sigma_1$-$\sigma_3$ plane, such that [Ashby and Sammis (1990)](https://link.springer.com/article/10.1007/BF00878002) derived an expression for the stress intensity factor $K_I$ at the tips of wing cracks, using linear elastic fracture mechanics, that can be plugged into the Charles Law to describe the slow extension of cracks under sustained applied stresses, and its effect on elastic modulus.
+
+Long term behavior, post crack coalescence (at $D \sim  1$), can be represented by 2-dimentional Mohr-Coulomb plasticity in the same plane.
+
+<!-- The material is populated with an array of penny shaped cracks from which pairs of wing crack grow subjected to a favorable stress field.
+The wing crack growth rate is evaluated using 
+
+The Charles Law reads :
+$$ \frac{\partial l}{\partial t} = \dot{l}_0 \left(\frac{K_I}{K_{Ic}}\right)^n$$
+
+Such that the rate of damage growth can be derived using the previously written definition of damage as a function of wing crack length `l` : 
+
+$$ \frac{\partial D}{\partial l} = \frac{3 D^{\frac{2}{3}} D_0^{\frac{1}{3}}}{\alpha a}$$
+    
+$K_I$ can be evaluated using linear elastic fracture mechanics either using principal remote stresses applied on the material , or using stress invariants as detailed in [Bhat et al. (2012)](https://asmedigitalcollection.asme.org/appliedmechanics/article-abstract/79/3/031016/456016/A-Micromechanics-Based-Constitutive-Model-for).  -->
+
+This model specifically describes the deformation of compact rocks under various conditions of confining pressures, strain rates or constant stress, in the brittle regime. Temperature dependence of brittle deformation is not taken into account.
 
 Coupled with the unregistered packages [DataFormatter.jl](https://github.com/Leooop/DataFormatter.jl) and [ParametersEstimator.jl](https://github.com/Leooop/ParametersEstimator.jl), This model can be used to perform bayesian parameters inversion against triaxial experimental data under constant strain rate or brittle creep conditions.
 
